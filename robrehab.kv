@@ -1,0 +1,39 @@
+<RobRehabGUI>:
+    
+  BoxLayout:
+    orientation: 'vertical'
+    pos: 0, 0
+    size: root.size[ 0 ] / 6, root.size[ 1 ]
+    padding: 10, 10
+    spacing: 10
+      
+    Button:
+      text: 'A'
+        
+    Button:
+      text: 'B'
+        
+    Button: 
+      text: 'C'
+        
+    Button:
+      text: 'D'
+      
+  BoxLayout:
+    id: data_graph
+    orientation: 'vertical'
+    pos: root.size[ 0 ] / 6, 0
+    size: 4 * root.size[ 0 ] / 6, root.size[ 1 ]
+      
+  BoxLayout:
+    orientation: 'horizontal'
+    pos: 5 * root.size[ 0 ] / 6, 0
+    size: root.size[ 0 ] / 6, root.size[ 1 ]
+      
+    Slider:
+      id: position_slider
+      orientation: 'vertical'
+      
+    Slider:
+      id: setpoint_slider
+      orientation: 'vertical'
