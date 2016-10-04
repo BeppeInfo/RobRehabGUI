@@ -1,39 +1,126 @@
 <RobRehabGUI>:
-    
+
   BoxLayout:
     orientation: 'vertical'
     pos: 0, 0
     size: root.size[ 0 ] / 6, root.size[ 1 ]
-    padding: 10, 10
-    spacing: 10
-      
+    padding: 20, 30
+    spacing: 15
+
+    Label:
+      text: '\nServer Address'
+      size_hint_y: 0.4
+    TextInput:
+      text: 'ip://127.0.0.1'
+      multiline: False
+      size_hint_y: 0.8
+      font_size: self.size[ 1 ] * 0.5
+      on_text_validate: root.SetUserName( self.text )
     Button:
-      text: 'A'
-        
+      text: 'Connect'
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.8
+
+    Label:
+      text: '\nUser Name'
+      size_hint_y: 0.4
+    TextInput:
+      multiline: False
+      size_hint_y: 0.8
+      font_size: self.size[ 1 ] * 0.6
+      on_text_validate: root.SetUserName( self.text )
+
+    Label:
+      text: '\nSelectors'
+      size_hint_y: 0.4
     Button:
-      text: 'B'
-        
-    Button: 
-      text: 'C'
-        
+      id: joint_selector
+      text: 'Select Joint'
     Button:
-      text: 'D'
-      
+      id: axis_selector
+      text: 'Select Axis'
+
+    Label:
+      text: ''
+      size_hint_y: 0.4
+    ToggleButton:
+      text: 'Enable Motor'
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.8
+
+    Label:
+      text: '\nControl State'
+      size_hint_y: 0.4
+    ToggleButton:
+      text: 'Offset Adjust'
+      group: 'control_state'
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.8
+    ToggleButton:
+      text: 'Calibration'
+      group: 'control_state'
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.8
+    Label:
+      id: calibration_led
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.7
+      canvas.before:
+        Color:
+          rgba: 1, 0, 0, 1
+        Rectangle:
+          pos: self.pos[ 0 ] + 5, self.pos[ 1 ] + 5
+          size: self.size[ 0 ] - 10, self.size[ 1 ] - 10
+    ToggleButton:
+      text: 'Optimization'
+      group: 'control_state'
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.8
+
+    Label:
+      text: '\nStiffness: ' + str(int(stiffness_slider.value))
+      size_hint_y: 0.4
+    Slider:
+      id: stiffness_slider
+      range: 0, 100
+      step: 1
+
   BoxLayout:
     id: data_graph
     orientation: 'vertical'
     pos: root.size[ 0 ] / 6, 0
     size: 4 * root.size[ 0 ] / 6, root.size[ 1 ]
-      
+    padding: 0, 20
+
   BoxLayout:
     orientation: 'horizontal'
     pos: 5 * root.size[ 0 ] / 6, 0
     size: root.size[ 0 ] / 6, root.size[ 1 ]
-      
-    Slider:
-      id: position_slider
+    padding: 20, 20
+    spacing: 20
+
+    BoxLayout:
       orientation: 'vertical'
-      
-    Slider:
-      id: setpoint_slider
+      Label:
+        text: 'Position\nMeasure'
+        size_hint_y: 0.1
+      Slider:
+        id: measure_slider
+        orientation: 'vertical'
+        range: -110, 110
+      Label:
+        text: format(measure_slider.value, '.2f')
+        size_hint_y: 0.1
+
+    BoxLayout:
       orientation: 'vertical'
+      Label:
+        text: 'Position\nSetpoint'
+        size_hint_y: 0.1
+      Slider:
+        id: setpoint_slider
+        orientation: 'vertical'
+        range: -110, 110
+      Label:
+        text: format( setpoint_slider.value, '.2f')
+        size_hint_y: 0.1
