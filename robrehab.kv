@@ -1,3 +1,5 @@
+#:import * definitions
+
 <RobRehabGUI>:
 
   BoxLayout:
@@ -5,25 +7,27 @@
     pos: 0, 0
     size: root.size[ 0 ] / 6, root.size[ 1 ]
     padding: 20, 30
-    spacing: 15
+    spacing: 10
 
     Label:
       text: '\nServer Address'
-      size_hint_y: 0.4
+      size_hint_y: 0.6
     TextInput:
+      id: address_input
       text: 'ip://127.0.0.1'
       multiline: False
       size_hint_y: 0.8
       font_size: self.size[ 1 ] * 0.5
-      on_text_validate: root.SetUserName( self.text )
+      #on_text_validate: root.SetUserName( self.text )
     Button:
       text: 'Connect'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
+      on_release: root.ConnectClient( address_input.text )
 
     Label:
       text: '\nUser Name'
-      size_hint_y: 0.4
+      size_hint_y: 0.6
     TextInput:
       multiline: False
       size_hint_y: 0.8
@@ -33,12 +37,45 @@
     Label:
       text: '\nSelectors'
       size_hint_y: 0.4
-    Button:
-      id: joint_selector
-      text: 'Select Joint'
-    Button:
-      id: axis_selector
-      text: 'Select Axis'
+    BoxLayout:
+      Label:
+        text: 'Robot:'
+        size_hint: ( 0.5, 0.8 )
+      Button:
+        id: robot_selector
+        text: root.NULL_ID
+        size_hint_y: 0.8
+        on_release: robots_list.open( self )
+        DropDown:
+          id: robots_list
+          on_parent: self.dismiss()
+          on_select: root.SetDevice( root.ROBOT, args[ 1 ] )
+    BoxLayout:
+      Label:
+        text: 'Joint:'
+        size_hint: ( 0.5, 0.8 )
+      Button:
+        id: joint_selector
+        text: root.NULL_ID
+        size_hint_y: 0.8
+        on_release: joints_list.open( self )
+        DropDown:
+          id: joints_list
+          on_parent: self.dismiss()
+          on_select: root.SetDevice( root.JOINT, args[ 1 ] )
+    BoxLayout:
+      Label:
+        text: 'Axis:'
+        size_hint: ( 0.5, 0.8 )
+      Button:
+        id: axis_selector
+        text: root.NULL_ID
+        size_hint_y: 0.8
+        on_release: axes_list.open( self )
+        DropDown:
+          id: axes_list
+          on_parent: self.dismiss()
+          on_select: root.SetDevice( root.AXIS, args[ 1 ] )
 
     Label:
       text: ''
@@ -47,20 +84,26 @@
       text: 'Enable Motor'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
+      on_press: root.SendCommand( ENABLE )
+      on_release: root.SendCommand( DISABLE )
 
     Label:
       text: '\nControl State'
-      size_hint_y: 0.4
+      size_hint_y: 0.8
     ToggleButton:
       text: 'Offset Adjust'
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
+      on_press: root.SendCommand( OFFSET )
+      on_release: root.SendCommand( OPERATE )
     ToggleButton:
       text: 'Calibration'
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
+      on_press: root.SendCommand( CALIBRATE )
+      on_release: root.SendCommand( OPERATE )
     Label:
       id: calibration_led
       pos_hint: { 'center_x': 0.5 }
@@ -76,6 +119,8 @@
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
+      on_press: root.SendCommand( OPTIMIZE )
+      on_release: root.SendCommand( OPERATE )
 
     Label:
       text: '\nStiffness: ' + str(int(stiffness_slider.value))
@@ -84,6 +129,7 @@
       id: stiffness_slider
       range: 0, 100
       step: 1
+      on_value: root.SendSetpoints()
 
   BoxLayout:
     id: data_graph
@@ -109,7 +155,7 @@
         orientation: 'vertical'
         range: -110, 110
       Label:
-        text: format(measure_slider.value, '.2f')
+        text: format( measure_slider.value, '.2f' )
         size_hint_y: 0.1
 
     BoxLayout:
@@ -121,6 +167,7 @@
         id: setpoint_slider
         orientation: 'vertical'
         range: -110, 110
+        on_value: root.SendSetpoints()
       Label:
-        text: format( setpoint_slider.value, '.2f')
+        text: format( setpoint_slider.value, '.2f' )
         size_hint_y: 0.1
