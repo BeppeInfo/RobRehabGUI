@@ -1,4 +1,10 @@
-#:import * definitions
+<LED>:
+  canvas.before:
+    Color:
+      rgba: self.color
+    Rectangle:
+      pos: self.pos[ 0 ] + 5, self.pos[ 1 ] + 5
+      size: self.size[ 0 ] - 10, self.size[ 1 ] - 10
 
 <RobRehabGUI>:
 
@@ -20,7 +26,7 @@
       font_size: self.size[ 1 ] * 0.5
       #on_text_validate: root.SetUserName( self.text )
     Button:
-      text: 'Connect'
+      text: 'Connect/Refresh'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
       on_release: root.ConnectClient( address_input.text )
@@ -45,11 +51,6 @@
         id: robot_selector
         text: root.NULL_ID
         size_hint_y: 0.8
-        on_release: robots_list.open( self )
-        DropDown:
-          id: robots_list
-          on_parent: self.dismiss()
-          on_select: root.SetDevice( root.ROBOT, args[ 1 ] )
     BoxLayout:
       Label:
         text: 'Joint:'
@@ -58,11 +59,6 @@
         id: joint_selector
         text: root.NULL_ID
         size_hint_y: 0.8
-        on_release: joints_list.open( self )
-        DropDown:
-          id: joints_list
-          on_parent: self.dismiss()
-          on_select: root.SetDevice( root.JOINT, args[ 1 ] )
     BoxLayout:
       Label:
         text: 'Axis:'
@@ -71,11 +67,6 @@
         id: axis_selector
         text: root.NULL_ID
         size_hint_y: 0.8
-        on_release: axes_list.open( self )
-        DropDown:
-          id: axes_list
-          on_parent: self.dismiss()
-          on_select: root.SetDevice( root.AXIS, args[ 1 ] )
 
     Label:
       text: ''
@@ -84,8 +75,7 @@
       text: 'Enable Motor'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
-      on_press: root.SendCommand( ENABLE )
-      on_release: root.SendCommand( DISABLE )
+      on_release: root.SetEnable( self.state == 'down' )
 
     Label:
       text: '\nControl State'
@@ -95,35 +85,28 @@
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
-      on_press: root.SendCommand( OFFSET )
-      on_release: root.SendCommand( OPERATE )
+      on_release: root.SetOffset( self.state == 'down' )
     ToggleButton:
+      id: calibration_button
       text: 'Calibration'
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
-      on_press: root.SendCommand( CALIBRATE )
-      on_release: root.SendCommand( OPERATE )
-    Label:
+      on_release: root.SetCalibration( self.state == 'down' )
+    LED:
       id: calibration_led
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.7
-      canvas.before:
-        Color:
-          rgba: 1, 0, 0, 1
-        Rectangle:
-          pos: self.pos[ 0 ] + 5, self.pos[ 1 ] + 5
-          size: self.size[ 0 ] - 10, self.size[ 1 ] - 10
     ToggleButton:
-      text: 'Optimization'
+      id: sampling_button
+      text: 'Sampling'
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
-      on_press: root.SendCommand( OPTIMIZE )
-      on_release: root.SendCommand( OPERATE )
+      on_release: root.SetOptimization( self.state == 'down' )
 
     Label:
-      text: '\nStiffness: ' + str(int(stiffness_slider.value))
+      text: '\nStiffness: ' + format(stiffness_slider.value, '.1f' )
       size_hint_y: 0.4
     Slider:
       id: stiffness_slider

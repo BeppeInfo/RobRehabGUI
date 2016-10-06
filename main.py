@@ -10,9 +10,16 @@ from kivy.uix.button import Button
 from kivy.clock import Clock
 
 from random import randrange
+import math
 
 from definitions import *
 import ipclient
+
+from kivy.uix.label import Label
+from kivy.properties import ListProperty
+class LED( Label ):
+  color = ListProperty( [ 1, 0, 0, 1 ] )
+
 
 class RobRehabGUI( Widget ):
   connection = None
@@ -24,25 +31,54 @@ class RobRehabGUI( Widget ):
   currentDeviceIndexes = [ None for i in range( len(deviceIDs) ) ]
   NULL_ID = '<Select>'
 
+  axisMeasures = [ 0.0 for var in range( AXIS_VARS_NUMBER ) ]
   setpoints = [ 0.0 for var in range( AXIS_VARS_NUMBER ) ]
+  jointMeasures = [ 0.0 for var in range( JOINT_VARS_NUMBER ) ]
+
+  class DataPlot:
+    def __init__( self, handle, values, source, offset ):
+      self.handle = handle
+      self.values = values
+      self.source = source
+      self.offset = offset
+  dataPlots = []
+  INITIAL_VALUES = [ 0.0 for value in range( 101 ) ]
 
   def __init__( self, **kwargs ):
     super( RobRehabGUI, self ).__init__( **kwargs )
     # or Widget.__init__( **kwargs ) ?
 
     self.deviceSelectors = ( self.ids[ 'robot_selector' ], self.ids[ 'joint_selector' ], self.ids[ 'axis_selector' ] )
-    self.deviceEntries = ( self.ids[ 'robots_list' ], self.ids[ 'joints_list' ], self.ids[ 'axes_list' ] )
+    self.deviceEntries = [ DropDown() for selector in self.deviceSelectors ]
+    for index in range( len(self.deviceEntries) ):
+      def SelectEntry( instance, name, index=index ):
+        self.SetDevice( index, name )
+      self.deviceEntries[ index ].bind( on_select=SelectEntry )
+      self.deviceSelectors[ index ].bind( on_release=self.deviceEntries[ index ].open )
 
     dataGraph = self.ids[ 'data_graph' ]
-    axisGraph = Graph( xlabel='Time', ylabel='Axis', x_ticks_minor=5, x_ticks_major=25, y_ticks_major=0.25,
-                       y_grid_label=True, x_grid_label=True, padding=5, x_grid=True, y_grid=True, xmin=-0, xmax=100, ymin=-1.5, ymax=1.5 )
-    self.axisPlot = MeshLinePlot( color=[ 1, 0, 0, 1 ] )
-    axisGraph.add_plot( self.axisPlot )
+
+    axisGraph = Graph( xlabel='Last Samples', ylabel='Axis', x_ticks_minor=5, x_ticks_major=25, y_ticks_major=0.25, y_grid_label=True,
+                       x_grid_label=True, padding=5, x_grid=True, y_grid=True, xmin=0, xmax=len(self.INITIAL_VALUES) - 1, ymin=-1.5, ymax=1.5 )
+    axisPositionPlot = MeshLinePlot( color=[ 1, 1, 0, 1 ] )
+    axisGraph.add_plot( axisPositionPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( axisPositionPlot, self.INITIAL_VALUES[:], self.axisMeasures, POSITION ) )
+    axisVelocityPlot = MeshLinePlot( color=[ 0, 1, 0, 1 ] )
+    axisGraph.add_plot( axisVelocityPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( axisVelocityPlot, self.INITIAL_VALUES[:], self.axisMeasures, VELOCITY ) )
+    refPositionPlot = MeshLinePlot( color=[ 0.5, 0.5, 0, 1 ] )
+    axisGraph.add_plot( refPositionPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( refPositionPlot, self.INITIAL_VALUES[:], self.setpoints, POSITION ) )
+    refVelocityPlot = MeshLinePlot( color=[ 0, 0.5, 0, 1 ] )
+    axisGraph.add_plot( refVelocityPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( refVelocityPlot, self.INITIAL_VALUES[:], self.setpoints, VELOCITY ) )
     dataGraph.add_widget( axisGraph )
-    jointGraph = Graph( xlabel='Time', ylabel='Joint', x_ticks_minor=5, x_ticks_major=25, y_ticks_major=0.25,
-                        y_grid_label=True, x_grid_label=True, padding=5, x_grid=True, y_grid=True, xmin=-0, xmax=100, ymin=-1.5, ymax=1.5 )
-    self.jointPlot = MeshLinePlot( color=[ 0, 1, 0, 1 ] )
-    jointGraph.add_plot( self.jointPlot )
+
+    jointGraph = Graph( xlabel='Last Samples', ylabel='Joint', x_ticks_minor=5, x_ticks_major=25, y_ticks_major=0.25, y_grid_label=True,
+                        x_grid_label=True, padding=5, x_grid=True, y_grid=True, xmin=0, xmax=len(self.INITIAL_VALUES) - 1, ymin=-1.5, ymax=1.5 )
+    jointForcePlot = MeshLinePlot( color=[ 1, 0, 0, 1 ] )
+    axisGraph.add_plot( jointForcePlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( jointForcePlot, self.INITIAL_VALUES[:], self.jointMeasures, FORCE ) )
     dataGraph.add_widget( jointGraph )
 
     Clock.schedule_interval( self.GraphUpdate, 0.02 )
@@ -71,14 +107,20 @@ class RobRehabGUI( Widget ):
       self.SetDevice( deviceType, self.deviceIDs[ deviceType ][ 0 ] if len(self.deviceIDs[ deviceType ]) > 0 else self.NULL_ID )
 
   def GraphUpdate( self, *args ):
-    self.axisPlot.points = [ ( sample, randrange( -150, 150 ) / 100.0 ) for sample in range( 100 ) ]
-    self.jointPlot.points = [ ( sample, randrange( -150, 150 ) / 100.0 ) for sample in range( 100 ) ]
+    for plot in self.dataPlots:
+      if len(plot.values) >= len(self.INITIAL_VALUES):
+        plot.handle.points = [ ( sample, plot.values[ sample ] ) for sample in range( len(self.INITIAL_VALUES) ) ]
+        plot.values = []
+      plot.values.append( plot.source[ plot.offset ] )
 
   def NetworkUpdate( self, *args ):
     SETPOINTS_MASK = int( '00010011', 2 )
     currentAxisIndex = self.currentDeviceIndexes[ self.AXIS ]
+    currentJointIndex = self.currentDeviceIndexes[ self.JOINT ]
     if self.connection is not None and currentAxisIndex is not None:
       self.connection.SendAxisSetpoints( currentAxisIndex, SETPOINTS_MASK, self.setpoints )
+      self.axisMeasures = self.connection.ReceiveAxisMeasures( currentAxisIndex )
+      self.jointMeasures = self.connection.ReceiveJointMeasures( currentJointIndex )
 
   def SetUserName( self, name ):
     print( 'set user name ' + name )
@@ -87,17 +129,72 @@ class RobRehabGUI( Widget ):
     self.deviceSelectors[ type ].text = name
     deviceIDs = self.deviceIDs[ type ]
     self.currentDeviceIndexes[ type ] = deviceIDs.index( name ) if ( name in deviceIDs ) else None
-    print( 'current type %d device index: %d' % ( type, self.currentDeviceIndexes[ type ] ) )
-
-  def SendCommand( self, commandKey ):
-    currentRobotIndex = self.currentDeviceIndexes[ self.ROBOT ]
-    if self.connection is not None and currentRobotIndex is not None:
-      self.connection.SendCommand( currentRobotIndex, commandKey ) 
+    print( 'current type %d device index: %s' % ( type, str(self.currentDeviceIndexes[ type ]) ) )
 
   def SendSetpoints( self ):
-    self.setpoints[ POSITION ] = self.ids[ 'setpoint_slider' ].value
+    self.setpoints[ POSITION ] = self.ids[ 'setpoint_slider' ].value * math.pi / 180
     self.setpoints[ STIFFNESS ] = self.ids[ 'stiffness_slider' ].value
     print( 'set setpoint position = %.3f and stiffness = %.3f' % ( self.setpoints[ POSITION ], self.setpoints[ STIFFNESS ] ) )
+
+  def _SendCommand( self, commandKey ):
+    currentRobotIndex = self.currentDeviceIndexes[ self.ROBOT ]
+    if self.connection is not None and currentRobotIndex is not None:
+      self.connection.SendCommand( currentRobotIndex, commandKey )
+
+  def SetEnable( self, enabled ):
+    if enabled: self._SendCommand( ENABLE )
+    else: self._SendCommand( DISABLE )
+
+  def SetOffset( self, enabled ):
+    if enabled: self._SendCommand( OFFSET )
+    else: self._SendCommand( OPERATE )
+
+  def SetCalibration( self, enabled ):
+    self.isCalibrating = enabled
+    calibrationLed = self.ids[ 'calibration_led' ]
+
+    def TurnLedOn( *args ):
+      calibrationLed.color = [ 0, 1, 0, 1 ]
+      Clock.schedule_once( TurnLedOff, 5.0 )
+    def TurnLedOff( *args ):
+      calibrationLed.color = [ 1, 0, 0, 1 ]
+      if self.isCalibrating: Clock.schedule_once( TurnLedOn, 3.0 )
+
+    if enabled:
+      self._SendCommand( CALIBRATE )
+      TurnLedOn()
+    else:
+      self._SendCommand( OPERATE )
+      TurnLedOff()
+
+  def SetOptimization( self, enabled ):
+    PHASE_CYCLES_NUMBER = 5
+    CYCLE_INTERVAL = 1.0
+    STIFFNESS_LIST = [ 0, 30, 60, 90, 90, 60, 30, 0 ]
+    self.samplingTime = 0.0
+
+    setpointSlider = self.ids[ 'setpoint_slider' ]
+    stiffnessSlider = self.ids[ 'stiffness_slider' ]
+    def UpdateSetpoint( delta ):
+      if self.samplingTime > len(STIFFNESS_LIST) * PHASE_CYCLES_NUMBER * CYCLE_INTERVAL:
+          self.ids[ 'sampling_button' ].state = 'down'
+          return False
+      self.samplingTime += delta
+      print( 'running time: ' + str(self.samplingTime) )
+      setpointPhase = int( self.samplingTime / ( PHASE_CYCLES_NUMBER * CYCLE_INTERVAL ) )
+      setpointDirection = 1.0 if setpointPhase < len(STIFFNESS_LIST) / 2 else -1.0
+      setpointSlider.value = math.sin( 2 * math.pi * self.samplingTime / CYCLE_INTERVAL ) * 0.1 * math.pi * 180
+      targetStiffness = STIFFNESS_LIST[ setpointPhase ] if setpointPhase < len(STIFFNESS_LIST) else 0.0
+      stiffnessSlider.value = stiffnessSlider.value * 0.95 + targetStiffness * 0.05
+
+    if enabled:
+      self._SendCommand( OPTIMIZE )
+      Clock.schedule_interval( UpdateSetpoint, 0.02 )
+    else:
+      self.samplingTime = len(STIFFNESS_LIST) * PHASE_CYCLES_NUMBER * CYCLE_INTERVAL + 1
+      setpointSlider.value = 0.0
+      stiffnessSlider.value = 0.0
+      self._SendCommand( OPERATE )
 
 class RobRehabApp( App ):
   def build( self ):
