@@ -103,7 +103,7 @@
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
-      on_release: root.SetOptimization( self.state == 'down' )
+      on_state: root.SetOptimization( self.state == 'down' )
 
     Label:
       text: '\nStiffness: ' + format(stiffness_slider.value, '.1f' )

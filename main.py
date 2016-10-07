@@ -22,6 +22,7 @@ class LED( Label ):
 
 class RobRehabGUI( Widget ):
   connection = None
+  UPDATE_INTERVAL = 0.02
 
   ROBOT = 0
   JOINT = 1
@@ -80,8 +81,8 @@ class RobRehabGUI( Widget ):
     self.dataPlots.append( RobRehabGUI.DataPlot( jointForcePlot, self.INITIAL_VALUES[:], self.jointMeasures, JOINT_FORCE ) )
     dataGraph.add_widget( jointGraph )
 
-    Clock.schedule_interval( self.GraphUpdate, 0.02 )
-    Clock.schedule_interval( self.NetworkUpdate, 0.02 )
+    Clock.schedule_interval( self.GraphUpdate, self.UPDATE_INTERVAL )
+    Clock.schedule_interval( self.NetworkUpdate, self.UPDATE_INTERVAL )
 
   def ConnectClient( self, serverAddress ):
     self.connection = None
@@ -105,21 +106,22 @@ class RobRehabGUI( Widget ):
       UpdateSelectorEntries( self.deviceSelectors[ deviceType ], self.deviceEntries[ deviceType ], self.deviceIDs[ deviceType ] )
       self.SetDevice( deviceType, self.deviceIDs[ deviceType ][ 0 ] if len(self.deviceIDs[ deviceType ]) > 0 else self.NULL_ID )
 
-  def GraphUpdate( self, *args ):
+  def GraphUpdate( self, dt ):
     for plot in self.dataPlots:
       if len(plot.values) >= len(self.INITIAL_VALUES):
         plot.handle.points = [ ( sample, plot.values[ sample ] ) for sample in range( len(self.INITIAL_VALUES) ) ]
         plot.values = []
       plot.values.append( plot.source[ plot.offset ] )
 
-  def NetworkUpdate( self, *args ):
-    SETPOINTS_MASK = int( '00010011', 2 )
+  def NetworkUpdate( self, dt ):
+    SETPOINTS_MASK = int( '00010011', base=2 )
     currentAxisIndex = self.currentDeviceIndexes[ self.AXIS ]
     currentJointIndex = self.currentDeviceIndexes[ self.JOINT ]
     if self.connection is not None and currentAxisIndex is not None:
       self.connection.SendAxisSetpoints( currentAxisIndex, SETPOINTS_MASK, self.setpoints )
-      self.axisMeasures = self.connection.ReceiveAxisMeasures( currentAxisIndex )
-      self.jointMeasures = self.connection.ReceiveJointMeasures( currentJointIndex )
+      #self.connection.SendJointSetpoints( currentJointIndex, 0, self.jointMeasures )
+      self.connection.ReceiveAxisMeasures( currentAxisIndex, self.axisMeasures )
+      self.connection.ReceiveJointMeasures( currentJointIndex, self.jointMeasures )
 
   def SetUserName( self, name ):
     if self.connection is not None: self.connection.SetUser( name )
@@ -167,10 +169,10 @@ class RobRehabGUI( Widget ):
   def SetOptimization( self, enabled ):
     PHASE_CYCLES_NUMBER = 5
     CYCLE_INTERVAL = 1.0
-    PHASE_INTERVAL = PHASE_CYCLES_NUMBER * CYCLE_INTERVAL    
+    PHASE_INTERVAL = PHASE_CYCLES_NUMBER * CYCLE_INTERVAL
     STIFFNESS_LIST = [ 0, 30, 60, 90, 90, 60, 30, 0 ]
     TOTAL_INTERVAL = len(STIFFNESS_LIST) * PHASE_INTERVAL
-    
+
     self.isSampling = enabled
     self.samplingTime = 0.0
 
@@ -187,8 +189,8 @@ class RobRehabGUI( Widget ):
 
     if enabled:
       self._SendCommand( OPTIMIZE )
-      Clock.schedule_interval( UpdateSetpoint, 0.02 )
-      Clock.schedule_once( lambda dt: self.ids[ 'sampling_button' ].trigger_action( 0 ), TOTAL_INTERVAL )
+      Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL )
+      #Clock.schedule_once( lambda dt: self.ids[ 'sampling_button' ].state = 'normal', TOTAL_INTERVAL )
     else:
       setpointSlider.value = 0.0
       stiffnessSlider.value = 0.0

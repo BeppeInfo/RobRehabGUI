@@ -11,31 +11,41 @@ from definitions import *
 DEFAULT_ADDRESS = '127.0.0.1'
 
 class Connection:
-  
-  host = DEFAULT_ADDRESS
-  
+
+  setpointBuffer = bytearray( BUFFER_SIZE )
+
   def __init__( self ):
     self.eventSocket = socket( AF_INET, SOCK_STREAM )
-    self.dataSocket = socket( AF_INET, SOCK_DGRAM )
-
-    self.dataSocket.settimeout( 0.01 )
+    self.axisSocket = socket( AF_INET, SOCK_DGRAM )
+    self.jointSocket = socket( AF_INET, SOCK_DGRAM )
 
     self.isConnected = False
 
   def __del__( self ):
-    if self.isConnected:
-      self.eventSocket.close()
-      self.dataSocket.close()
+    self.Disconnect()
 
   def Connect( self, host ):
-    self.host = host
     try:
-      self.eventSocket.connect( ( self.host, 50000 ) )
-      self.eventSocket.setblocking( 0 )
+      self.Disconnect()
+      self.eventSocket.connect( ( host, 50000 ) )
+      self.eventSocket.settimeout( 5.0 )
+      self.axisSocket.connect( ( host, 50001 ) )
+      self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
+      #self.axisSocket.settimeout( 0.1 )
+      self.jointSocket.connect( ( host, 50002 ) )
+      self.jointSocket.sendall( bytearray( BUFFER_SIZE ) )
+      #self.jointSocket.settimeout( 0.1 )
       self.isConnected = True
       print( 'client connected' )
     except:
       print( sys.exc_info() )
+      self.isConnected = False
+
+  def Disconnect( self ):
+    if self.isConnected:
+      self.eventSocket.close()
+      self.axisSocket.close()
+      self.jointSocket.close()
       self.isConnected = False
 
   def RefreshInfo( self ):
@@ -43,9 +53,10 @@ class Connection:
     if self.isConnected:
       messageBuffer = bytearray( [ 0 ] )
       try:
-        self.eventSocket.send( messageBuffer )
+        self.eventSocket.sendall( messageBuffer )
         robotsInfoString = self.eventSocket.recv( BUFFER_SIZE )
-        robotsInfo = json.loads( robotsInfoString.decode() )
+        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString).rstrip( '\0' ) )
+        robotsInfo = json.loads( str( robotsInfoString ).rstrip( '\0' ) )
       except:
         print( sys.exc_info() )
         robotsInfo = {}
@@ -61,16 +72,16 @@ class Connection:
       messageBuffer = bytearray( [ 1, robotIndex, commandKey ] )
       print( 'SendCommand: sending message buffer: ' + str(list(messageBuffer)) )
       try:
-        self.eventSocket.send( messageBuffer )
+        self.eventSocket.sendall( messageBuffer )
       except:
         print( sys.exc_info() )
-        
+
   def SetUser( self, userName ):
     if self.isConnected:
       messageBuffer = bytearray( [ 1, 0, SET_USER ] ) + userName.encode()
       print( 'SetUser: sending message buffer: ' + str(list(messageBuffer)) )
       try:
-        self.eventSocket.send( messageBuffer )
+        self.eventSocket.sendall( messageBuffer )
       except:
         print( sys.exc_info() )
 
@@ -78,44 +89,43 @@ class Connection:
     return false
     #return self.eventSocket.recv( BUFFER_SIZE )
 
-  def _SendSetpoints( self, port, deviceIndex, mask, setpoints ):
+  def _SendSetpoints( self, dataSocket, deviceIndex, mask, setpoints ):
     if self.isConnected:
-      messageBuffer = bytearray( [ 1, deviceIndex, mask ] )
-      for setpoint in setpoints:
-        messageBuffer += struct.pack( 'f', setpoint )
-      print( '_SendSetpoints: sending message buffer: ' + str(list(messageBuffer)) )
+      struct.pack_into( 'BBB', self.setpointBuffer, 0, 1, deviceIndex, mask )
+      for setpointIndex in range( len(setpoints) ):
+        setpointOffset = 3 + setpointIndex * FLOAT_SIZE
+        struct.pack_into( 'f', self.setpointBuffer, setpointOffset, setpoints[ setpointIndex ] )
+      #print( '_SendSetpoints: sending message buffer: ' + str( list( self.setpointBuffer ) ) )
       try:
-        self.dataSocket.sendto( messageBuffer, ( self.host, port ) )
+        dataSocket.sendall( self.setpointBuffer )
       except:
         print( sys.exc_info() )
 
   def SendAxisSetpoints( self, axisIndex, mask, setpoints ):
-    self._SendSetpoints( 50001, axisIndex, mask, setpoints )
+    self._SendSetpoints( self.axisSocket, axisIndex, mask, setpoints )
 
   def SendJointSetpoints( self, jointIndex, mask, setpoints ):
-    self._SendSetpoints( 50002, jointIndex, mask, setpoints )
+    self._SendSetpoints( self.jointSocket, jointIndex, mask, setpoints )
 
-  def _ReceiveMeasures( self, port, deviceIndex, varsNumber ):
-    measures = [ 0.0 for varIndex in range( varsNumber ) ]
+  def _ReceiveMeasures( self, dataSocket, deviceIndex, measures ):
     if self.isConnected:
       try:
-        messageBuffer, remoteAddress = self.dataSocket.recvfrom( BUFFER_SIZE, MSG_PEEK )
-        if remoteAddress[ 1 ] == port:
-          self.dataSocket.recvfrom( BUFFER_SIZE )
-          devicesNumber = messageBuffer[ 0 ]
-          for deviceCount in range( devicesNumber ):
-            dataOffset = deviceCount * varsNumber * FLOAT_SIZE + 1
-            if messageBuffer[ dataOffset ] == deviceIndex:
-              for measureIndex in range( varsNumber ):
-                measureOffset = dataOffset + measureIndex * FLOAT_SIZE
-                measures[ measureIndex ] = struct.unpack_from( 'f', messageBuffer, measureOffset )[ 0 ]
+        messageBuffer = dataSocket.recv( BUFFER_SIZE )
+        devicesNumber = ord( messageBuffer[ 0 ] )
+        #print( '_ReceiveMeasures: received message buffer: ' + str( list( messageBuffer ) ) )
+        for deviceCount in range( devicesNumber ):
+          dataOffset = deviceCount * len(measures) * FLOAT_SIZE + 1
+          if ord( messageBuffer[ dataOffset ] ) == deviceIndex:
+            for measureIndex in range( len(measures) ):
+              measureOffset = dataOffset + measureIndex * FLOAT_SIZE
+              measures[ measureIndex ] = struct.unpack_from( 'f', messageBuffer, measureOffset )[ 0 ]
+          return True
       except:
         print( sys.exc_info() )
+    return False
 
-    return measures
+  def ReceiveAxisMeasures( self, axisIndex, measures ):
+    return self._ReceiveMeasures( self.axisSocket, axisIndex, measures )
 
-  def ReceiveAxisMeasures( self, axisIndex ):
-    self._ReceiveMeasures( 50001, axisIndex, AXIS_VARS_NUMBER )
-
-  def ReceiveJointMeasures( self, jointIndex ):
-    self._ReceiveMeasures( 50002, jointIndex, JOINT_VARS_NUMBER )
+  def ReceiveJointMeasures( self, jointIndex, measures ):
+    return self._ReceiveMeasures( self.jointSocket, jointIndex, measures )
