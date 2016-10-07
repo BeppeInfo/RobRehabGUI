@@ -50,7 +50,6 @@ class Connection:
         print( sys.exc_info() )
         robotsInfo = {}
 
-    robotsInfo = json.loads( '{"robots":["robot_0"],"joints":["joint_0","joint_1"],"axes":["axis_0","axis_1"]}' )
     robotsList = robotsInfo.get( 'robots', [] )
     jointsList = robotsInfo.get( 'joints', [] )
     axesList = robotsInfo.get( 'axes', [] )

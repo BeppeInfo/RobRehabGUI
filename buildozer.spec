@@ -25,7 +25,7 @@ source.include_exts = py,png,jpg,kv,atlas
 #source.exclude_dirs = tests, bin
 
 # (list) List of exclusions using pattern matching
-source.exclude_patterns = LICENSE,README.md,main-pyqt5.py
+source.exclude_patterns = LICENSE,README.md,main-pyqt5.py,bluetooth_serial.py,btclient.py
 
 # (str) Application versioning (method 1)
 version = 0.1
@@ -36,8 +36,8 @@ version = 0.1
 
 # (list) Application requirements
 # comma seperated e.g. requirements = sqlite3,kivy
-#requirements = python3crystax,hostpython3crystax,kivy
-requirements = python2,hostpython2,kivy,numpy
+requirements = python3crystax,hostpython3crystax,kivy
+#requirements = python2,hostpython2,kivy,numpy
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -86,15 +86,15 @@ android.api = 19
 android.sdk = 21
 
 # (str) Android NDK version to use
-#android.ndk = 10.3.1
-android.ndk = 11c
+android.ndk = 10.3.1
+#android.ndk = 12b
 
 # (bool) Use --private data storage (True) or --dir public storage (False)
 #android.private_storage = True
 
 # (str) Android NDK directory (if empty, it will be automatically downloaded.)
-#android.ndk_path = /home/leonardojc/.buildozer/android/platform/crystax-ndk-10.3.1/
-android.ndk_path = /opt/android-ndk/
+android.ndk_path = /home/leonardojc/.buildozer/android/platform/crystax-ndk-10.3.1/
+#android.ndk_path = /opt/android-ndk/
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
 android.sdk_path = /opt/android-sdk/
