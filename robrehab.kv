@@ -112,7 +112,7 @@
       id: stiffness_slider
       range: 0, 100
       step: 1
-      on_value: root.SendSetpoints()
+      on_value: root.SetSetpoints()
 
   BoxLayout:
     id: data_graph
@@ -150,7 +150,7 @@
         id: setpoint_slider
         orientation: 'vertical'
         range: -110, 110
-        on_value: root.SendSetpoints()
+        on_value: root.SetSetpoints()
       Label:
         text: format( setpoint_slider.value, '.2f' )
         size_hint_y: 0.1

@@ -119,7 +119,6 @@ class RobRehabGUI( Widget ):
     currentJointIndex = self.currentDeviceIndexes[ self.JOINT ]
     if self.connection is not None and currentAxisIndex is not None:
       self.connection.SendAxisSetpoints( currentAxisIndex, SETPOINTS_MASK, self.setpoints )
-      #self.connection.SendJointSetpoints( currentJointIndex, 0, self.jointMeasures )
       self.connection.ReceiveAxisMeasures( currentAxisIndex, self.axisMeasures )
       self.connection.ReceiveJointMeasures( currentJointIndex, self.jointMeasures )
 
@@ -131,7 +130,7 @@ class RobRehabGUI( Widget ):
     deviceIDs = self.deviceIDs[ type ]
     self.currentDeviceIndexes[ type ] = deviceIDs.index( name ) if ( name in deviceIDs ) else None
 
-  def SendSetpoints( self ):
+  def SetSetpoints( self ):
     self.setpoints[ AXIS_POSITION ] = self.ids[ 'setpoint_slider' ].value * math.pi / 180
     self.setpoints[ AXIS_STIFFNESS ] = self.ids[ 'stiffness_slider' ].value
 
@@ -168,10 +167,10 @@ class RobRehabGUI( Widget ):
 
   def SetOptimization( self, enabled ):
     PHASE_CYCLES_NUMBER = 5
-    CYCLE_INTERVAL = 1.0
+    CYCLE_INTERVAL = 2.0
     PHASE_INTERVAL = PHASE_CYCLES_NUMBER * CYCLE_INTERVAL
-    STIFFNESS_LIST = [ 0, 30, 60, 90, 90, 60, 30, 0 ]
-    TOTAL_INTERVAL = len(STIFFNESS_LIST) * PHASE_INTERVAL
+    PHASES_STIFFNESS_LIST = [ 0, 30, 60, 90, 90, 60, 30, 0 ]
+    TOTAL_SAMPLING_INTERVAL = len(PHASES_STIFFNESS_LIST) * PHASE_INTERVAL
 
     self.isSampling = enabled
     self.samplingTime = 0.0
@@ -179,19 +178,22 @@ class RobRehabGUI( Widget ):
     setpointSlider = self.ids[ 'setpoint_slider' ]
     stiffnessSlider = self.ids[ 'stiffness_slider' ]
     def UpdateSetpoint( delta ):
-      if not self.isSampling: return False
+      if self.samplingTime >= TOTAL_SAMPLING_INTERVAL:
+        self.ids[ 'sampling_button' ].state = 'normal'
+        return False
       self.samplingTime += delta
       setpointPhase = int( self.samplingTime / PHASE_INTERVAL )
-      setpointDirection = 1.0 if setpointPhase < len(STIFFNESS_LIST) / 2 else -1.0
+      setpointDirection = 1.0 if setpointPhase < len(PHASES_STIFFNESS_LIST) / 2 else -1.0
       setpointSlider.value = math.sin( 2 * math.pi * self.samplingTime / CYCLE_INTERVAL ) * 0.1 * math.pi * 180
-      targetStiffness = STIFFNESS_LIST[ setpointPhase ] if setpointPhase < len(STIFFNESS_LIST) else 0.0
+      self.setpoints[ AXIS_POSITION ] *= setpointDirection
+      targetStiffness = PHASES_STIFFNESS_LIST[ setpointPhase ] if setpointPhase < len(PHASES_STIFFNESS_LIST) else 0.0
       stiffnessSlider.value = stiffnessSlider.value * 0.95 + targetStiffness * 0.05
 
     if enabled:
       self._SendCommand( OPTIMIZE )
       Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL )
-      #Clock.schedule_once( lambda dt: self.ids[ 'sampling_button' ].state = 'normal', TOTAL_INTERVAL )
     else:
+      self.samplingTime = TOTAL_SAMPLING_INTERVAL
       setpointSlider.value = 0.0
       stiffnessSlider.value = 0.0
       self._SendCommand( OPERATE )

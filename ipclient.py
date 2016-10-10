@@ -31,10 +31,10 @@ class Connection:
       self.eventSocket.settimeout( 5.0 )
       self.axisSocket.connect( ( host, 50001 ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
-      #self.axisSocket.settimeout( 0.1 )
+      self.axisSocket.settimeout( 0.1 )
       self.jointSocket.connect( ( host, 50002 ) )
       self.jointSocket.sendall( bytearray( BUFFER_SIZE ) )
-      #self.jointSocket.settimeout( 0.1 )
+      self.jointSocket.settimeout( 0.1 )
       self.isConnected = True
       print( 'client connected' )
     except:
@@ -103,9 +103,6 @@ class Connection:
 
   def SendAxisSetpoints( self, axisIndex, mask, setpoints ):
     self._SendSetpoints( self.axisSocket, axisIndex, mask, setpoints )
-
-  def SendJointSetpoints( self, jointIndex, mask, setpoints ):
-    self._SendSetpoints( self.jointSocket, jointIndex, mask, setpoints )
 
   def _ReceiveMeasures( self, dataSocket, deviceIndex, measures ):
     if self.isConnected:
