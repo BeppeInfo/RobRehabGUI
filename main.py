@@ -9,6 +9,8 @@ from kivy.uix.dropdown import DropDown
 from kivy.uix.button import Button
 from kivy.clock import Clock
 
+from kivy.storage.jsonstore import JsonStore
+
 import math
 
 from definitions import *
@@ -47,6 +49,10 @@ class RobRehabGUI( Widget ):
   def __init__( self, **kwargs ):
     super( RobRehabGUI, self ).__init__( **kwargs )
     # or Widget.__init__( **kwargs ) ?
+
+    self.configStorage = JsonStore( 'config.json' )
+    if self.configStorage.exists( 'server' ): self.ids[ 'address_input' ].text = self.configStorage.get( 'server' )[ 'address' ]
+    if self.configStorage.exists( 'user' ): self.ids[ 'user_name_input' ].text = self.configStorage.get( 'user' )[ 'name' ]
 
     self.deviceSelectors = ( self.ids[ 'robot_selector' ], self.ids[ 'joint_selector' ], self.ids[ 'axis_selector' ] )
     self.deviceEntries = [ DropDown() for selector in self.deviceSelectors ]
@@ -91,6 +97,7 @@ class RobRehabGUI( Widget ):
     print( 'acquired %s server host: %s' % ( serverType, serverHost ) )
     if serverType == 'ip': self.connection = ipclient.Connection()
     if self.connection is not None:
+      self.configStorage.put( 'server', address=serverAddress )
       self.connection.Connect( serverHost )
       self.deviceIDs = self.connection.RefreshInfo()
 
@@ -124,6 +131,7 @@ class RobRehabGUI( Widget ):
 
   def SetUserName( self, name ):
     if self.connection is not None: self.connection.SetUser( name )
+    self.configStorage.put( 'user', name=name )
 
   def SetDevice( self, type, name ):
     self.deviceSelectors[ type ].text = name
