@@ -1,7 +1,11 @@
 import kivy
 kivy.require( '1.9.1' )
 
-from kivy.garden.graph import Graph, MeshLinePlot
+# add the following 2 lines to solve OpenGL 2.0 bug
+from kivy import Config
+Config.set( 'graphics', 'multisamples', '0' )
+
+from kivy.garden.graph import Graph, SmoothLinePlot
 
 from kivy.app import App
 from kivy.uix.widget import Widget
@@ -24,6 +28,8 @@ class LED( Label ):
 
 class RobRehabGUI( Widget ):
   connection = None
+  currentServerAddress = None
+  
   UPDATE_INTERVAL = 0.02
 
   ROBOT = 0
@@ -66,23 +72,23 @@ class RobRehabGUI( Widget ):
 
     axisGraph = Graph( xlabel='Last Samples', ylabel='Axis', x_ticks_minor=5, x_ticks_major=25, y_ticks_major=0.25, y_grid_label=True,
                        x_grid_label=True, padding=5, x_grid=True, y_grid=True, xmin=0, xmax=len(self.INITIAL_VALUES) - 1, ymin=-1.5, ymax=1.5 )
-    axisPositionPlot = MeshLinePlot( color=[ 1, 1, 0, 1 ] )
+    axisPositionPlot = SmoothLinePlot( color=[ 1, 1, 0, 1 ] )
     axisGraph.add_plot( axisPositionPlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( axisPositionPlot, self.INITIAL_VALUES[:], self.axisMeasures, AXIS_POSITION ) )
-    axisVelocityPlot = MeshLinePlot( color=[ 0, 1, 0, 1 ] )
+    axisVelocityPlot = SmoothLinePlot( color=[ 0, 1, 0, 1 ] )
     axisGraph.add_plot( axisVelocityPlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( axisVelocityPlot, self.INITIAL_VALUES[:], self.axisMeasures, AXIS_VELOCITY ) )
-    refPositionPlot = MeshLinePlot( color=[ 0.5, 0.5, 0, 1 ] )
+    refPositionPlot = SmoothLinePlot( color=[ 0.5, 0.5, 0, 1 ] )
     axisGraph.add_plot( refPositionPlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( refPositionPlot, self.INITIAL_VALUES[:], self.setpoints, AXIS_POSITION ) )
-    refVelocityPlot = MeshLinePlot( color=[ 0, 0.5, 0, 1 ] )
+    refVelocityPlot = SmoothLinePlot( color=[ 0, 0.5, 0, 1 ] )
     axisGraph.add_plot( refVelocityPlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( refVelocityPlot, self.INITIAL_VALUES[:], self.setpoints, AXIS_VELOCITY ) )
     dataGraph.add_widget( axisGraph )
 
     jointGraph = Graph( xlabel='Last Samples', ylabel='Joint', x_ticks_minor=5, x_ticks_major=25, y_ticks_major=0.25, y_grid_label=True,
                         x_grid_label=True, padding=5, x_grid=True, y_grid=True, xmin=0, xmax=len(self.INITIAL_VALUES) - 1, ymin=-1.5, ymax=1.5 )
-    jointForcePlot = MeshLinePlot( color=[ 1, 0, 0, 1 ] )
+    jointForcePlot = SmoothLinePlot( color=[ 1, 0, 0, 1 ] )
     axisGraph.add_plot( jointForcePlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( jointForcePlot, self.INITIAL_VALUES[:], self.jointMeasures, JOINT_FORCE ) )
     dataGraph.add_widget( jointGraph )
@@ -91,15 +97,17 @@ class RobRehabGUI( Widget ):
     Clock.schedule_interval( self.NetworkUpdate, self.UPDATE_INTERVAL )
 
   def ConnectClient( self, serverAddress ):
-    self.connection = None
     self.deviceIDs = ( [], [], [] )
     serverType, serverHost = serverAddress.split( '://' )
-    print( 'acquired %s server host: %s' % ( serverType, serverHost ) )
-    if serverType == 'ip': self.connection = ipclient.Connection()
-    if self.connection is not None:
-      self.configStorage.put( 'server', address=serverAddress )
-      self.connection.Connect( serverHost )
-      self.deviceIDs = self.connection.RefreshInfo()
+    if serverAddress != self.currentServerAddress:
+      if serverType == 'ip': self.connection = ipclient.Connection()
+      else: self.connection = None
+      if self.connection is not None:
+        self.configStorage.put( 'server', address=serverAddress )
+        print( 'connecting to host: ' + serverHost )
+        self.connection.Connect( serverHost )
+        self.currentServerAddress = serverAddress
+    if self.connection is not None: self.deviceIDs = self.connection.RefreshInfo()
 
     def UpdateSelectorEntries( selector, entriesList, entryNames ):
       entriesList.clear_widgets()

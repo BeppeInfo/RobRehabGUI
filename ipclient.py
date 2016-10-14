@@ -55,8 +55,10 @@ class Connection:
       try:
         self.eventSocket.sendall( messageBuffer )
         robotsInfoString = self.eventSocket.recv( BUFFER_SIZE )
-        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString).rstrip( '\0' ) )
-        robotsInfo = json.loads( str( robotsInfoString ).rstrip( '\0' ) )
+        stringTerminator = str(robotsInfoString).find( '\0' )
+        robotsInfoString = str(robotsInfoString)[ :stringTerminator ]
+        print( 'RefreshInfo: received JSON string: ' + robotsInfoString )
+        robotsInfo = json.loads( robotsInfoString )
       except:
         print( sys.exc_info() )
         robotsInfo = {}
