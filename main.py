@@ -127,6 +127,7 @@ class RobRehabGUI( Widget ):
         plot.handle.points = [ ( sample, plot.values[ sample ] ) for sample in range( len(self.INITIAL_VALUES) ) ]
         plot.values = []
       plot.values.append( plot.source[ plot.offset ] )
+    self.ids[ 'measure_slider' ].value = self.axisMeasures[ AXIS_POSITION ]
 
   def NetworkUpdate( self, dt ):
     SETPOINTS_MASK = int( '00010011', base=2 )
@@ -135,6 +136,7 @@ class RobRehabGUI( Widget ):
     if self.connection is not None and currentAxisIndex is not None:
       self.connection.SendAxisSetpoints( currentAxisIndex, SETPOINTS_MASK, self.setpoints )
       self.connection.ReceiveAxisMeasures( currentAxisIndex, self.axisMeasures )
+      #print( 'Axis ' + str(currentAxisIndex) + ' measures: ' + str(self.axisMeasures) )
       self.connection.ReceiveJointMeasures( currentJointIndex, self.jointMeasures )
 
   def SetUserName( self, name ):

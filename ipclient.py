@@ -10,6 +10,8 @@ from definitions import *
 
 DEFAULT_ADDRESS = '127.0.0.1'
 
+MESSAGE_TIMEOUT = 0.02
+
 class Connection:
 
   setpointBuffer = bytearray( BUFFER_SIZE )
@@ -31,10 +33,10 @@ class Connection:
       self.eventSocket.settimeout( 5.0 )
       self.axisSocket.connect( ( host, 50001 ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
-      self.axisSocket.settimeout( 0.1 )
+      self.axisSocket.settimeout( MESSAGE_TIMEOUT )
       self.jointSocket.connect( ( host, 50002 ) )
       self.jointSocket.sendall( bytearray( BUFFER_SIZE ) )
-      self.jointSocket.settimeout( 0.1 )
+      self.jointSocket.settimeout( MESSAGE_TIMEOUT )
       self.isConnected = True
       print( 'client connected' )
     except:
@@ -113,8 +115,9 @@ class Connection:
         devicesNumber = ord( messageBuffer[ 0 ] )
         #print( '_ReceiveMeasures: received message buffer: ' + str( list( messageBuffer ) ) )
         for deviceCount in range( devicesNumber ):
-          dataOffset = deviceCount * len(measures) * FLOAT_SIZE + 1
-          if ord( messageBuffer[ dataOffset ] ) == deviceIndex:
+          indexOffset = deviceCount * len(measures) * FLOAT_SIZE + 1
+          if ord( messageBuffer[ indexOffset ] ) == deviceIndex:
+            dataOffset = indexOffset + 1
             for measureIndex in range( len(measures) ):
               measureOffset = dataOffset + measureIndex * FLOAT_SIZE
               measures[ measureIndex ] = struct.unpack_from( 'f', messageBuffer, measureOffset )[ 0 ]
