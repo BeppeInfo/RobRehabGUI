@@ -1,6 +1,10 @@
 import kivy
 kivy.require( '1.9.1' )
 
+# add the following 2 lines to solve OpenGL 2.0 bug
+from kivy import Config
+Config.set( 'graphics', 'multisamples', '0' )
+
 from kivy.garden.graph import Graph, SmoothLinePlot
 
 from kivy.app import App
@@ -24,6 +28,8 @@ class LED( Label ):
 
 class RobRehabGUI( Widget ):
   connection = None
+  currentServerAddress = None
+
   UPDATE_INTERVAL = 0.02
 
   robotEnabled = False
@@ -126,11 +132,6 @@ class RobRehabGUI( Widget ):
         plot.handle.points = [ ( sample, plot.values[ sample ] ) for sample in range( len(self.INITIAL_VALUES) ) ]
         plot.values = []
       plot.values.append( plot.source[ plot.offset ] )
-    #axisPositionPlot.values.append( self.axisMeasures[ DOF_POSITION ] )
-    #axisVelocityPlot.values.append( self.axisMeasures[ DOF_VELOCITY ] )
-    #refPositionPlot.values.append( self.setpoints[ DOF_POSITION ] )
-    #refVelocityPlot.values.append( self.setpoints[ DOF_VELOCITY ] )
-    #axisForcePlot.values.append( self.axisMeasures[ DOF_FORCE ] )
     self.ids[ 'measure_slider' ].value = self.axisMeasures[ DOF_POSITION ] * 180 / math.pi
 
   def NetworkUpdate( self, dt ):
