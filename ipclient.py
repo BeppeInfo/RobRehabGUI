@@ -55,21 +55,21 @@ class Connection:
       try:
         self.eventSocket.sendall( messageBuffer )
         robotsInfoString = self.eventSocket.recv( BUFFER_SIZE )
-        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString).rstrip( '\0' ) )
-        robotsInfo = json.loads( str( robotsInfoString ).rstrip( '\0' ) )
+        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString, 'utf-8').strip( '\0' ) )
+        robotsInfo = json.loads( str(robotsInfoString, 'utf-8').strip( '\0' ) )
       except:
         print( sys.exc_info() )
         robotsInfo = {}
 
-    robotsList = robotsInfo.get( 'robots', [] )
+    robotID = robotsInfo.get( 'id', '' )
     jointsList = robotsInfo.get( 'joints', [] )
     axesList = robotsInfo.get( 'axes', [] )
 
-    return ( robotsList, jointsList, axesList )
+    return ( robotID, ( jointsList, axesList ) )
 
-  def SendCommand( self, robotIndex, commandKey ):
+  def SendCommand( self, commandKey ):
     if self.isConnected:
-      messageBuffer = bytearray( [ 1, robotIndex, commandKey ] )
+      messageBuffer = bytearray( [ commandKey ] )
       print( 'SendCommand: sending message buffer: ' + str(list(messageBuffer)) )
       try:
         self.eventSocket.sendall( messageBuffer )
@@ -78,7 +78,7 @@ class Connection:
 
   def SetUser( self, userName ):
     if self.isConnected:
-      messageBuffer = bytearray( [ 1, 0, SET_USER ] ) + userName.encode()
+      messageBuffer = bytearray( [ SET_USER ] ) + userName.encode()
       print( 'SetUser: sending message buffer: ' + str(list(messageBuffer)) )
       try:
         self.eventSocket.sendall( messageBuffer )
@@ -89,36 +89,38 @@ class Connection:
     return false
     #return self.eventSocket.recv( BUFFER_SIZE )
 
-  def _SendSetpoints( self, dataSocket, deviceIndex, mask, setpoints ):
+  def _SendSetpoints( self, dataSocket, deviceIndex, setpoints ):
     if self.isConnected:
-      struct.pack_into( 'BBB', self.setpointBuffer, 0, 1, deviceIndex, mask )
+      struct.pack_into( 'BB', self.setpointBuffer, 0, 1, deviceIndex )
       for setpointIndex in range( len(setpoints) ):
-        setpointOffset = 3 + setpointIndex * FLOAT_SIZE
+        setpointOffset = 2 + setpointIndex * FLOAT_SIZE
         struct.pack_into( 'f', self.setpointBuffer, setpointOffset, setpoints[ setpointIndex ] )
       #print( '_SendSetpoints: sending message buffer: ' + str( list( self.setpointBuffer ) ) )
       try:
         dataSocket.sendall( self.setpointBuffer )
       except:
-        print( sys.exc_info() )
+        #print( sys.exc_info() )
+        pass
 
-  def SendAxisSetpoints( self, axisIndex, mask, setpoints ):
-    self._SendSetpoints( self.axisSocket, axisIndex, mask, setpoints )
+  def SendAxisSetpoints( self, axisIndex, setpoints ):
+    self._SendSetpoints( self.axisSocket, axisIndex, setpoints )
 
   def _ReceiveMeasures( self, dataSocket, deviceIndex, measures ):
     if self.isConnected:
       try:
         messageBuffer = dataSocket.recv( BUFFER_SIZE )
-        devicesNumber = ord( messageBuffer[ 0 ] )
+        devicesNumber = int( messageBuffer[ 0 ] )
         #print( '_ReceiveMeasures: received message buffer: ' + str( list( messageBuffer ) ) )
         for deviceCount in range( devicesNumber ):
           dataOffset = deviceCount * len(measures) * FLOAT_SIZE + 1
-          if ord( messageBuffer[ dataOffset ] ) == deviceIndex:
+          if int( messageBuffer[ dataOffset ] ) == deviceIndex:
             for measureIndex in range( len(measures) ):
-              measureOffset = dataOffset + measureIndex * FLOAT_SIZE
+              measureOffset = dataOffset + measureIndex * FLOAT_SIZE + 1
               measures[ measureIndex ] = struct.unpack_from( 'f', messageBuffer, measureOffset )[ 0 ]
           return True
       except:
-        print( sys.exc_info() )
+        #print( sys.exc_info() )
+        pass
     return False
 
   def ReceiveAxisMeasures( self, axisIndex, measures ):

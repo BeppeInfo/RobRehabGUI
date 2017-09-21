@@ -42,15 +42,14 @@
       on_text_validate: root.SetUserName( self.text )
 
     Label:
-      text: '\nSelectors'
       size_hint_y: 0.4
     BoxLayout:
       Label:
         text: 'Robot:'
         size_hint: ( 0.5, 0.8 )
-      Button:
-        id: robot_selector
-        text: root.NULL_ID
+      Label:
+        id: robot_id_display
+        font_size: self.size[ 1 ] * 0.6
         size_hint_y: 0.8
     BoxLayout:
       Label:
@@ -70,7 +69,6 @@
         size_hint_y: 0.8
 
     Label:
-      text: ''
       size_hint_y: 0.4
     ToggleButton:
       text: 'Enable Motor'
@@ -82,6 +80,7 @@
       text: '\nControl State'
       size_hint_y: 0.8
     ToggleButton:
+      id: offset_button
       text: 'Offset Adjust'
       group: 'control_state'
       pos_hint: { 'center_x': 0.5 }
@@ -95,7 +94,7 @@
       size_hint_x: 0.8
       on_release: root.SetCalibration( self.state == 'down' )
     LED:
-      id: calibration_led
+      id: indication_led
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.7
     ToggleButton:
