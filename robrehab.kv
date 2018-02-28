@@ -104,9 +104,15 @@
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
       on_state: root.SetOptimization( self.state == 'down' )
+    ToggleButton:
+      id: operation_button
+      text: 'Operation'
+      pos_hint: { 'center_x': 0.5 }
+      size_hint_x: 0.8
+      on_state: root.SetOperation( self.state == 'down' )
 
     Label:
-      text: '\nStiffness: ' + format(stiffness_slider.value, '.1f' )
+      text: '\nStiffness: ' + format(stiffness_slider.value, '.3f' )
       size_hint_y: 0.4
     Slider:
       id: stiffness_slider
@@ -138,8 +144,8 @@
         orientation: 'vertical'
         range: -110, 110
       Label:
-        text: format( measure_slider.value, '.2f' )
-        size_hint_y: 0.1
+        text: format( measure_slider.value, '.3f' )
+        size_hint_y: 0.05
 
     BoxLayout:
       orientation: 'vertical'
@@ -151,6 +157,9 @@
         orientation: 'vertical'
         range: -110, 110
         on_value: root.SetSetpoints()
-      Label:
-        text: format( setpoint_slider.value, '.2f' )
-        size_hint_y: 0.1
+      TextInput:
+        text: format( setpoint_slider.value, '.3f' )
+        multiline: False
+        size_hint_x: 0.8
+        size_hint_y: 0.05
+        on_text_validate: setpoint_slider.value = float(self.text)
