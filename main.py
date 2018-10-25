@@ -76,8 +76,9 @@ class RobRehabGUI( Widget ):
 
     dataGraph = self.ids[ 'data_graph' ]
 
-    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_major':0.25, 'y_grid_label':True, 'x_grid_label':True,
-                         'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1, 'ymin':-1.5, 'ymax':1.5,
+    measure_range = self.ids[ 'measure_slider' ].range
+    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_major':2.5, 'y_grid_label':True, 'x_grid_label':True,
+                         'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1, 'ymin':measure_range[ 0 ], 'ymax':measure_range[ 1 ],
                          'background_color':[ 1, 1, 1, 1 ], 'tick_color':[ 0, 0, 0, 1 ], 'border_color':[ 0, 0, 0, 1 ], 'label_options':{ 'color': [ 0, 0, 0, 1 ], 'bold':True } }
 
     axisPositionGraph = Graph( ylabel='Position', **GRAPH_PROPERTIES )
@@ -141,7 +142,7 @@ class RobRehabGUI( Widget ):
       plot.values.append( plot.source[ plot.offset ] )
 
   def SliderUpdate( self, dt ):
-    self.ids[ 'measure_slider' ].value = self.axisMeasures[ DOF_POSITION ] * 180 / math.pi
+    self.ids[ 'measure_slider' ].value = self.axisMeasures[ DOF_ACCELERATION ]#self.axisMeasures[ DOF_POSITION ] #* 180 / math.pi
 
   def NetworkUpdate( self, dt ):
     currentAxisIndex = self.currentDeviceIndexes[ self.AXIS ]
@@ -165,8 +166,9 @@ class RobRehabGUI( Widget ):
 
   def SetSetpoints( self ):
     if not self.isSampling:
-      self.setpoints[ DOF_POSITION ] = self.ids[ 'setpoint_slider' ].value * math.pi / 180
+      self.setpoints[ DOF_POSITION ] = self.ids[ 'setpoint_slider' ].value #* math.pi / 180
       self.setpoints[ DOF_STIFFNESS ] = self.ids[ 'stiffness_slider' ].value
+      self.setpoints[ DOF_DAMPING ] = self.ids[ 'damping_slider' ].value
     self.setpointsUpdated = True
 
   def _SendCommand( self, commandKey ):
@@ -207,7 +209,7 @@ class RobRehabGUI( Widget ):
     PHASE_CYCLES_NUMBER = 5
     PHASE_CYCLE_INTERVAL = 8.0
     SETPOINT_AMPLITUDE = math.pi / 4
-    SETPOINT_AMPLITUDE_ANGLE = SETPOINT_AMPLITUDE * 180 / math.pi
+    #SETPOINT_AMPLITUDE_ANGLE = SETPOINT_AMPLITUDE * 180 / math.pi
     PHASE_INTERVAL = PHASE_CYCLES_NUMBER * PHASE_CYCLE_INTERVAL
     PHASES_STIFFNESS_LIST = [     0,    30,    60,   60,   30,    0,    0,   10 ]
     PHASES_DIRECTION_LIST = [     1,     1,     1,    1,    1,    1,   -1,   -1 ]
@@ -219,6 +221,7 @@ class RobRehabGUI( Widget ):
 
     setpointSlider = self.ids[ 'setpoint_slider' ]
     stiffnessSlider = self.ids[ 'stiffness_slider' ]
+    dampingSlider = self.ids[ 'damping_slider' ]
     activeLED = self.ids[ 'indication_led' ]
     def UpdateSetpoint( delta ):
       phaseIndex = int( self.samplingTime / PHASE_INTERVAL )
@@ -229,19 +232,21 @@ class RobRehabGUI( Widget ):
       setpointDirection = PHASES_DIRECTION_LIST[ phaseIndex ]
       activeLED.color = [ 0, 1, 0, 1 ] if PHASES_ACTIVE_LIST[ phaseIndex ] else [ 1, 0, 0, 1 ]
       setpoint = math.sin( 2 * math.pi * self.samplingTime / PHASE_CYCLE_INTERVAL )
-      setpointSlider.value = setpoint * SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
+      setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
       self.setpoints[ DOF_POSITION ] = setpoint * SETPOINT_AMPLITUDE * setpointDirection - SETPOINT_AMPLITUDE
       targetStiffness = PHASES_STIFFNESS_LIST[ phaseIndex ]
       stiffnessSlider.value = stiffnessSlider.value * 0.9 + targetStiffness * 0.1
       self.setpoints[ DOF_STIFFNESS ] = stiffnessSlider.value
+      dampingSlider.value = 0.0
 
     if enabled:
-      self._SendCommand( OPTIMIZE )
+      self._SendCommand( PREPROCESS )
       self.samplingEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
     else:
       self.samplingTime = TOTAL_SAMPLING_INTERVAL
       setpointSlider.value = 0.0
       stiffnessSlider.value = 0.0
+      dampingSlider.value = 0.0
       activeLED.color = [ 1, 0, 0, 1 ]
       self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
       self.samplingEvent.cancel()
@@ -249,7 +254,7 @@ class RobRehabGUI( Widget ):
   def SetOperation( self, enabled ):
     PHASE_CYCLE_INTERVAL = 8.0
     SETPOINT_AMPLITUDE = math.pi / 4
-    SETPOINT_AMPLITUDE_ANGLE = SETPOINT_AMPLITUDE * 180 / math.pi
+    #SETPOINT_AMPLITUDE_ANGLE = SETPOINT_AMPLITUDE * 180 / math.pi
 
     self.isOperating = enabled
     self.operationTime = 0.0
@@ -266,6 +271,7 @@ class RobRehabGUI( Widget ):
 
     setpointSlider = self.ids[ 'setpoint_slider' ]
     stiffnessSlider = self.ids[ 'stiffness_slider' ]
+    dampingSlider = self.ids[ 'damping_slider' ]
     activeLED = self.ids[ 'indication_led' ]
     def UpdateSetpoint( delta ):
       #cyclesCount = int( self.operationTime / PHASE_CYCLE_INTERVAL )
@@ -274,7 +280,7 @@ class RobRehabGUI( Widget ):
       #if self.hasStarted:
       setpoint = - float( self.trajectory[ self.curveStep % len(self.trajectory) ] )
       self.curveStep += 1
-      setpointSlider.value = setpoint * SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
+      setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
       #elif self.setpoints[ DOF_STIFFNESS ] > 0:
       #  if( abs( self.setpoints[ DOF_POSITION ] - self.axisMeasures[ DOF_POSITION ] ) ) < 0.0001:
       #    self.hasStarted = True
@@ -290,6 +296,7 @@ class RobRehabGUI( Widget ):
     else:
       setpointSlider.value = 0.0
       stiffnessSlider.value = 0.0
+      dampingSlider.value = 0.0
       activeLED.color = [ 1, 0, 0, 1 ]
       self._SendCommand( PASSIVATE )
       self.operationEvent.cancel()

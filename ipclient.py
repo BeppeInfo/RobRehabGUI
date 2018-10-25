@@ -53,12 +53,12 @@ class Connection:
   def RefreshInfo( self ):
     robotsInfo = {}
     if self.isConnected:
-      messageBuffer = bytearray( [ 0 ] )
+      messageBuffer = bytearray( [ REQUEST_INFO ] )
       try:
         self.eventSocket.sendall( messageBuffer )
         robotsInfoString = self.eventSocket.recv( BUFFER_SIZE )
-        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString, 'utf-8').strip( '\0' ) )
-        robotsInfo = json.loads( str(robotsInfoString, 'utf-8').strip( '\0' ) )
+        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString[1:], 'utf-8').strip( '\0' ) )
+        if robotsInfoString[ 0 ] == REQUEST_INFO: robotsInfo = json.loads( str(robotsInfoString[1:], 'utf-8').strip( '\0' ) )
       except:
         print( sys.exc_info() )
         robotsInfo = {}
@@ -112,14 +112,15 @@ class Connection:
       try:
         messageBuffer = dataSocket.recv( BUFFER_SIZE )
         devicesNumber = int( messageBuffer[ 0 ] )
-        #print( '_ReceiveMeasures: received message buffer: ' + str( list( messageBuffer ) ) )
+        #print( '_ReceiveMeasures: received values for: ' + str( devicesNumber ) + ' axes' )
         for deviceCount in range( devicesNumber ):
-          dataOffset = deviceCount * len(measures) * FLOAT_SIZE + 1
+          dataOffset = deviceCount * ( 1 + len(measures) * FLOAT_SIZE ) + 1
+          #print( '_ReceiveMeasures: comparing indexes: ' + str( int( messageBuffer[ dataOffset ] ) ) + '/' + str( deviceIndex ) )
           if int( messageBuffer[ dataOffset ] ) == deviceIndex:
             for measureIndex in range( len(measures) ):
-              measureOffset = dataOffset + measureIndex * FLOAT_SIZE + 1
+              measureOffset = dataOffset + 1 + measureIndex * FLOAT_SIZE
               measures[ measureIndex ] = struct.unpack_from( 'f', messageBuffer, measureOffset )[ 0 ]
-          return True
+            return True
       except:
         #print( sys.exc_info() )
         pass

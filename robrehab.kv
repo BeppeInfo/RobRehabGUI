@@ -22,7 +22,7 @@
       id: address_input
       text: 'ip://127.0.0.1'
       multiline: False
-      size_hint_y: 0.8
+      size_hint_y: 0.9
       font_size: self.size[ 1 ] * 0.5
       #on_text_validate: root.SetUserName( self.text )
     Button:
@@ -37,12 +37,12 @@
     TextInput:
       id: user_name_input
       multiline: False
-      size_hint_y: 0.8
+      size_hint_y: 0.9
       font_size: self.size[ 1 ] * 0.6
       on_text_validate: root.SetUserName( self.text )
 
     Label:
-      size_hint_y: 0.4
+      size_hint_y: 0.2
     BoxLayout:
       Label:
         text: 'Robot:'
@@ -69,7 +69,7 @@
         size_hint_y: 0.8
 
     Label:
-      size_hint_y: 0.4
+      size_hint_y: 0.2
     ToggleButton:
       text: 'Enable Motor'
       pos_hint: { 'center_x': 0.5 }
@@ -112,11 +112,21 @@
       on_state: root.SetOperation( self.state == 'down' )
 
     Label:
+      size_hint_y: 0.2
+    Label:
       text: '\nStiffness: ' + format(stiffness_slider.value, '.3f' )
-      size_hint_y: 0.4
+      size_hint_y: 0.2
     Slider:
       id: stiffness_slider
       range: 0, 100
+      step: 1
+      on_value: root.SetSetpoints()
+    Label:
+      text: '\nDamping: ' + format(damping_slider.value, '.3f' )
+      size_hint_y: 0.2
+    Slider:
+      id: damping_slider
+      range: 0, 10
       step: 1
       on_value: root.SetSetpoints()
 
@@ -142,7 +152,7 @@
       Slider:
         id: measure_slider
         orientation: 'vertical'
-        range: -110, 110
+        range: -20.0, 20.0
       Label:
         text: format( measure_slider.value, '.3f' )
         size_hint_y: 0.05
@@ -155,7 +165,7 @@
       Slider:
         id: setpoint_slider
         orientation: 'vertical'
-        range: -110, 110
+        range: measure_slider.range
         on_value: root.SetSetpoints()
       TextInput:
         text: format( setpoint_slider.value, '.3f' )
