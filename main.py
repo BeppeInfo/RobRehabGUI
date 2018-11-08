@@ -77,7 +77,7 @@ class RobRehabGUI( Widget ):
     dataGraph = self.ids[ 'data_graph' ]
 
     measure_range = self.ids[ 'measure_slider' ].range
-    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_major':2.5, 'y_grid_label':True, 'x_grid_label':True,
+    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_major':0.25, 'y_grid_label':True, 'x_grid_label':True,
                          'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1, 'ymin':measure_range[ 0 ], 'ymax':measure_range[ 1 ],
                          'background_color':[ 1, 1, 1, 1 ], 'tick_color':[ 0, 0, 0, 1 ], 'border_color':[ 0, 0, 0, 1 ], 'label_options':{ 'color': [ 0, 0, 0, 1 ], 'bold':True } }
 
@@ -142,7 +142,7 @@ class RobRehabGUI( Widget ):
       plot.values.append( plot.source[ plot.offset ] )
 
   def SliderUpdate( self, dt ):
-    self.ids[ 'measure_slider' ].value = self.axisMeasures[ DOF_ACCELERATION ]#self.axisMeasures[ DOF_POSITION ] #* 180 / math.pi
+    self.ids[ 'measure_slider' ].value = self.axisMeasures[ DOF_POSITION ] #* 180 / math.pi
 
   def NetworkUpdate( self, dt ):
     currentAxisIndex = self.currentDeviceIndexes[ self.AXIS ]
@@ -185,7 +185,10 @@ class RobRehabGUI( Widget ):
 
   def SetOffset( self, enabled ):
     if enabled: self._SendCommand( OFFSET )
-    else: self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
+    else:
+      self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
+      self.ids[ 'setpoint_slider' ].value = 0
+      self.SetSetpoints()
 
   def SetCalibration( self, enabled ):
     self.isCalibrating = enabled
