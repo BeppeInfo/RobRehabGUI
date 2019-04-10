@@ -94,6 +94,9 @@ class RobRehabGUI( Widget ):
     refVelocityPlot = SmoothLinePlot( color=[ 0, 0.5, 0, 1 ] )
     axisPositionGraph.add_plot( refVelocityPlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( refVelocityPlot, self.INITIAL_VALUES[:], self.setpoints, DOF_VELOCITY ) )
+    axisAccelerationPlot = SmoothLinePlot( color=[ 1, 0, 0, 1 ] )
+    axisPositionGraph.add_plot( axisAccelerationPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( axisAccelerationPlot, self.INITIAL_VALUES[:], self.axisMeasures, DOF_ACCELERATION ) )
     dataGraph.add_widget( axisPositionGraph )
 
     dataGraph.add_widget( Label( size_hint_y=0.05 ) )
