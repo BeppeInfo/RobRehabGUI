@@ -3,14 +3,11 @@
 from socket import *
 
 import sys
-import json
 import struct
 
 from definitions import *
 
 DEFAULT_ADDRESS = '127.0.0.1'
-
-MESSAGE_TIMEOUT = 0.02
 
 class Connection:
 
@@ -30,7 +27,7 @@ class Connection:
     try:
       self.Disconnect()
       self.eventSocket.connect( ( host, 50000 ) )
-      self.eventSocket.settimeout( 5.0 )
+      self.eventSocket.settimeout( 2 * MESSAGE_TIMEOUT )
       self.axisSocket.connect( ( host, 50001 ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
       self.axisSocket.settimeout( MESSAGE_TIMEOUT )
@@ -50,46 +47,32 @@ class Connection:
       self.jointSocket.close()
       self.isConnected = False
 
-  def RefreshInfo( self ):
-    robotsInfo = {}
+  def SendRequest( self, opcode, dataString='' ):
+    replyCode = 0
+    replyString = ''
     if self.isConnected:
-      messageBuffer = bytearray( [ REQUEST_INFO ] )
+      messageBuffer = bytearray( [ opcode ] ) + dataString.encode()
+      print( 'SendRequest: sending message buffer: ' + str(list(messageBuffer)) )
       try:
         self.eventSocket.sendall( messageBuffer )
-        robotsInfoString = self.eventSocket.recv( BUFFER_SIZE )
-        print( 'RefreshInfo: received JSON string: ' + str(robotsInfoString[1:], 'utf-8').strip( '\0' ) )
-        if robotsInfoString[ 0 ] == REQUEST_INFO: robotsInfo = json.loads( str(robotsInfoString[1:], 'utf-8').strip( '\0' ) )
+        replyData = self.eventSocket.recv( BUFFER_SIZE )
+        replyCode = replyData[ 0 ]
+        replyString = str(replyData[ 1: ], 'utf-8').strip( '\0' )
       except:
         print( sys.exc_info() )
-        robotsInfo = {}
+    return ( replyCode, replyString )
 
-    robotID = robotsInfo.get( 'id', '' )
-    jointsList = robotsInfo.get( 'joints', [] )
-    axesList = robotsInfo.get( 'axes', [] )
-
-    return ( robotID, ( jointsList, axesList ) )
-
-  def SendCommand( self, commandKey ):
+  def ReceiveReply( self ):
+    replyCode = 0
+    replyString = ''
     if self.isConnected:
-      messageBuffer = bytearray( [ commandKey ] )
-      print( 'SendCommand: sending message buffer: ' + str(list(messageBuffer)) )
       try:
-        self.eventSocket.sendall( messageBuffer )
+        replyData = self.eventSocket.recv( BUFFER_SIZE )
+        replyCode = replyData[ 0 ]
+        replyString = str(replyData[ 1: ], 'utf-8').strip( '\0' )
       except:
         print( sys.exc_info() )
-
-  def SetUser( self, userName ):
-    if self.isConnected:
-      messageBuffer = bytearray( [ SET_USER ] ) + userName.encode()
-      print( 'SetUser: sending message buffer: ' + str(list(messageBuffer)) )
-      try:
-        self.eventSocket.sendall( messageBuffer )
-      except:
-        print( sys.exc_info() )
-
-  def CheckState( self, eventNumber ):
-    return false
-    #return self.eventSocket.recv( BUFFER_SIZE )
+    return ( replyCode, replyString )
 
   def _SendSetpoints( self, dataSocket, deviceIndex, setpoints ):
     if self.isConnected:
