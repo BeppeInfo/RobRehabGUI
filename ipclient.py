@@ -27,7 +27,7 @@ class Connection:
     try:
       self.Disconnect()
       self.eventSocket.connect( ( host, 50000 ) )
-      self.eventSocket.settimeout( 2 * MESSAGE_TIMEOUT )
+      self.eventSocket.settimeout( 1.0 )
       self.axisSocket.connect( ( host, 50001 ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
       self.axisSocket.settimeout( MESSAGE_TIMEOUT )

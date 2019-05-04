@@ -192,7 +192,7 @@ class RobRehabGUI( Widget ):
     
   def SetAxis( self, name ):
     self.axisSelector.text = name
-    self.currentAxisIndex = self.axisSelector.index( name ) if ( name in self.axisIDs ) else None
+    self.currentAxisIndex = self.axisIDs.index( name ) if ( name in self.axisIDs ) else None
 
   def SetSetpoints( self ):
     if not self.isSampling:
