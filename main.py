@@ -16,6 +16,7 @@ from kivy.clock import Clock
 from kivy.storage.jsonstore import JsonStore
 
 import math
+import json
 
 from definitions import *
 import ipclient
@@ -30,7 +31,7 @@ class RobRehabGUI( Widget ):
   connection = None
   currentServerAddress = None
 
-  UPDATE_INTERVAL = 0.02
+  UPDATE_INTERVAL = 2 * MESSAGE_TIMEOUT
 
   setpointsUpdated = True
 
@@ -42,8 +43,9 @@ class RobRehabGUI( Widget ):
 
   JOINT = 0
   AXIS = 1
-  deviceIDs = ( [], [] )
-  currentDeviceIndexes = [ None for i in range( len(deviceIDs) ) ]
+  robotIDs = []
+  axisIDs = []
+  currentAxisIndex = None
   NULL_ID = '<Select>'
 
   axisMeasures = [ 0.0 for var in range( DOF_VARS_NUMBER ) ]
@@ -66,17 +68,31 @@ class RobRehabGUI( Widget ):
     if self.configStorage.exists( 'server' ): self.ids[ 'address_input' ].text = self.configStorage.get( 'server' )[ 'address' ]
     if self.configStorage.exists( 'user' ): self.ids[ 'user_name_input' ].text = self.configStorage.get( 'user' )[ 'name' ]
 
-    self.deviceSelectors = ( self.ids[ 'joint_selector' ], self.ids[ 'axis_selector' ] )
-    self.deviceEntries = [ DropDown() for selector in self.deviceSelectors ]
-    for index in range( len(self.deviceEntries) ):
-      def SelectEntry( instance, name, index=index ):
-        self.SetDevice( index, name )
-      self.deviceEntries[ index ].bind( on_select=SelectEntry )
-      self.deviceSelectors[ index ].bind( on_release=self.deviceEntries[ index ].open )
-
+    self.robotSelector = self.ids[ 'robot_selector' ]
+    self.robotEntries = DropDown()
+    self.robotEntries.bind( on_select=lambda instance, name: self.SetRobot( name ) )
+    self.robotSelector.bind( on_release=self.robotEntries.open )
+    self.axisSelector = self.ids[ 'axis_selector' ]
+    self.axisEntries = DropDown()
+    self.axisEntries.bind( on_select=lambda instance, name: self.SetAxis( name ) )
+    self.axisSelector.bind( on_release=self.axisEntries.open )
+    
+    self.enableToggle = self.ids[ 'enable_button' ]
+    self.offsetToggle = self.ids[ 'offset_button' ]
+    self.calibrationToggle = self.ids[ 'calibration_button' ]
+    self.samplingToggle = self.ids[ 'sampling_button' ]
+    self.operationToggle = self.ids[ 'operation_button' ]
+    
+    self.measureSlider = self.ids[ 'measure_slider' ]
+    self.setpointSlider = self.ids[ 'setpoint_slider' ]
+    self.stiffnessSlider = self.ids[ 'stiffness_slider' ]
+    self.dampingSlider = self.ids[ 'damping_slider' ]
+    
+    self.indicationLED = self.ids[ 'indication_led' ]
+    
     dataGraph = self.ids[ 'data_graph' ]
 
-    measure_range = self.ids[ 'measure_slider' ].range
+    measure_range = self.measureSlider.range
     GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_major':0.25, 'y_grid_label':True, 'x_grid_label':True,
                          'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1, 'ymin':measure_range[ 0 ], 'ymax':measure_range[ 1 ],
                          'background_color':[ 1, 1, 1, 1 ], 'tick_color':[ 0, 0, 0, 1 ], 'border_color':[ 0, 0, 0, 1 ], 'label_options':{ 'color': [ 0, 0, 0, 1 ], 'bold':True } }
@@ -107,35 +123,23 @@ class RobRehabGUI( Widget ):
     self.dataPlots.append( RobRehabGUI.DataPlot( axisForcePlot, self.INITIAL_VALUES[:], self.axisMeasures, DOF_FORCE ) )
     dataGraph.add_widget( axisForceGraph )
 
-    Clock.schedule_interval( self.NetworkUpdate, self.UPDATE_INTERVAL / 2 )
+    Clock.schedule_interval( self.DataUpdate, self.UPDATE_INTERVAL / 2 )
     Clock.schedule_interval( self.GraphUpdate, self.UPDATE_INTERVAL * 2 )
     Clock.schedule_interval( self.SliderUpdate, self.UPDATE_INTERVAL )
 
   def ConnectClient( self, serverAddress ):
     self.connection = None
-    self.robotID = ''
-    self.deviceIDs = ( [], [] )
+    self.robotIDs = []
     serverType, serverHost = serverAddress.split( '://' )
     print( 'acquired %s server host: %s' % ( serverType, serverHost ) )
     if serverType == 'ip': self.connection = ipclient.Connection()
     if self.connection is not None:
       self.configStorage.put( 'server', address=serverAddress )
       self.connection.Connect( serverHost )
-      self.robotID, self.deviceIDs = self.connection.RefreshInfo()
-
-    self.ids[ 'robot_id_display' ].text = self.robotID
-
-    def UpdateSelectorEntries( selector, entriesList, entryNames ):
-      entriesList.clear_widgets()
-      for name in entryNames:
-        entryButton = Button( text=name, size_hint_y=None )
-        entryButton.height = entryButton.font_size * 2
-        entryButton.bind( on_release=lambda button: entriesList.select( button.text ) )
-        entriesList.add_widget( entryButton )
-
-    for deviceType in range( len(self.deviceIDs) ):
-      UpdateSelectorEntries( self.deviceSelectors[ deviceType ], self.deviceEntries[ deviceType ], self.deviceIDs[ deviceType ] )
-      self.SetDevice( deviceType, self.deviceIDs[ deviceType ][ 0 ] if len(self.deviceIDs[ deviceType ]) > 0 else self.NULL_ID )
+      replyCode, replyString = self.connection.SendRequest( LIST_CONFIGS )
+      if replyCode == LIST_CONFIGS: 
+        self.robotIDs = json.loads( replyString )[ 'robots' ]
+        self._UpdateSelectorEntries( self.robotSelector, self.robotEntries, self.robotIDs )
 
   def GraphUpdate( self, dt ):
     for plot in self.dataPlots:
@@ -145,63 +149,87 @@ class RobRehabGUI( Widget ):
       plot.values.append( plot.source[ plot.offset ] )
 
   def SliderUpdate( self, dt ):
-    self.ids[ 'measure_slider' ].value = self.axisMeasures[ DOF_POSITION ] #* 180 / math.pi
+    self.measureSlider.value = self.axisMeasures[ DOF_POSITION ]
 
-  def NetworkUpdate( self, dt ):
-    currentAxisIndex = self.currentDeviceIndexes[ self.AXIS ]
-    currentJointIndex = self.currentDeviceIndexes[ self.JOINT ]
-    if self.connection is not None and currentAxisIndex is not None:
+  def DataUpdate( self, dt ):
+    if self.connection is not None and self.currentAxisIndex is not None:
       if self.setpointsUpdated:
-        self.connection.SendAxisSetpoints( currentAxisIndex, self.setpoints )
+        self.connection.SendAxisSetpoints( self.currentAxisIndex, self.setpoints )
         self.setpointsUpdated = False
-      self.connection.ReceiveAxisMeasures( currentAxisIndex, self.axisMeasures )
-      #print( 'NetworkUpdate: received axis measures: ' + str( self.axisMeasures ) )
-      #self.connection.ReceiveJointMeasures( currentJointIndex, self.jointMeasures )
-
+      self.connection.ReceiveAxisMeasures( self.currentAxisIndex, self.axisMeasures )
+      #print( 'DataUpdate: received axis measures: ' + str( self.axisMeasures ) )
+      #self.connection.ReceiveJointMeasures( self.currentJointIndex, self.jointMeasures )
+  
+  def EventUpdate( self, dt ):
+    if self.connection is not None:
+      replyCode, replyString = self.connection.ReceiveReply()
+  
   def SetUserName( self, name ):
-    if self.connection is not None: self.connection.SetUser( name )
+    if self.connection is not None: self.connection.SendRequest( SET_USER, name )
     self.configStorage.put( 'user', name=name )
-
-  def SetDevice( self, type, name ):
-    self.deviceSelectors[ type ].text = name
-    deviceIDs = self.deviceIDs[ type ]
-    self.currentDeviceIndexes[ type ] = deviceIDs.index( name ) if ( name in deviceIDs ) else None
+    
+  def _UpdateSelectorEntries( self, selector, entriesList, entryNames ):
+          entriesList.clear_widgets()
+          for name in entryNames:
+            entryButton = Button( text=name, size_hint_y=None )
+            entryButton.height = entryButton.font_size * 2
+            entryButton.bind( on_release=lambda button: entriesList.select( button.text ) )
+            entriesList.add_widget( entryButton )
+    
+  def SetRobot( self, name ):
+    self.enableToggle = 'normal'
+    replyCode, replyString = self.connection.SendRequest( SET_CONFIG, name )
+    if replyCode == SET_CONFIG: 
+      replyCode, replyString = self.connection.SendRequest( GET_CONFIG )
+      if replyCode == GET_CONFIG: 
+        robotInfo = json.loads( replyString )
+        robotID = robotInfo.get( 'id', '' )
+        self.axisIDs = robotInfo.get( 'axes', [] )
+        jointIDs = robotInfo.get( 'joints', [] )
+        self.robotSelector.text = robotID
+        self._UpdateSelectorEntries( self.axisSelector, self.axisEntries, self.axisIDs )
+        self.SetAxis( self.axisIDs[ 0 ] if len(self.axisIDs) > 0 else self.NULL_ID )
+    
+  def SetAxis( self, name ):
+    self.axisSelector.text = name
+    self.currentAxisIndex = self.axisIDs.index( name ) if ( name in self.axisIDs ) else None
 
   def SetSetpoints( self ):
     if not self.isSampling:
-      self.setpoints[ DOF_POSITION ] = self.ids[ 'setpoint_slider' ].value #* math.pi / 180
-      self.setpoints[ DOF_STIFFNESS ] = self.ids[ 'stiffness_slider' ].value
-      self.setpoints[ DOF_DAMPING ] = self.ids[ 'damping_slider' ].value
+      self.setpoints[ DOF_POSITION ] = self.setpointSlider.value
+      self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
+      self.setpoints[ DOF_DAMPING ] = self.dampingSlider.value
     self.setpointsUpdated = True
 
   def _SendCommand( self, commandKey ):
-    self.connection.SendCommand( commandKey )
+    self.connection.SendRequest( commandKey )
 
   def SetEnable( self, enabled ):
-    offsetToggle = self.ids[ 'offset_button' ]
     if enabled:
       self._SendCommand( ENABLE )
-      offsetToggle.state = 'down'
+      self.offsetToggle.state = 'down'
     else:
       self._SendCommand( DISABLE )
-      offsetToggle.state = 'normal'
+      self.offsetToggle.state = 'normal'
+      self.calibrationToggle.state = 'normal'
+      self.samplingToggle.state = 'normal'
+      self.operationToggle.state = 'normal'
 
   def SetOffset( self, enabled ):
     if enabled: self._SendCommand( OFFSET )
     else:
       self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
-      self.ids[ 'setpoint_slider' ].value = 0
+      self.setpointSlider.value = 0
       self.SetSetpoints()
 
   def SetCalibration( self, enabled ):
     self.isCalibrating = enabled
-    calibrationLED = self.ids[ 'indication_led' ]
 
     def TurnLedOn( *args ):
-      calibrationLED.color = [ 0, 1, 0, 1 ]
+      self.indicationLED.color = [ 0, 1, 0, 1 ]
       Clock.schedule_once( TurnLedOff, 5.0 )
     def TurnLedOff( *args ):
-      calibrationLED.color = [ 1, 0, 0, 1 ]
+      self.indicationLED.color = [ 1, 0, 0, 1 ]
       if self.isCalibrating: Clock.schedule_once( TurnLedOn, 3.0 )
 
     if enabled:
@@ -225,35 +253,31 @@ class RobRehabGUI( Widget ):
     self.isSampling = enabled
     self.samplingTime = 0.0
 
-    setpointSlider = self.ids[ 'setpoint_slider' ]
-    stiffnessSlider = self.ids[ 'stiffness_slider' ]
-    dampingSlider = self.ids[ 'damping_slider' ]
-    activeLED = self.ids[ 'indication_led' ]
     def UpdateSetpoint( delta ):
       phaseIndex = int( self.samplingTime / PHASE_INTERVAL )
       if phaseIndex >= len(PHASES_STIFFNESS_LIST):
-        self.ids[ 'sampling_button' ].state = 'normal'
+        self.samplingToggle.state = 'normal'
         return False
       self.samplingTime += delta
       setpointDirection = PHASES_DIRECTION_LIST[ phaseIndex ]
-      activeLED.color = [ 0, 1, 0, 1 ] if PHASES_ACTIVE_LIST[ phaseIndex ] else [ 1, 0, 0, 1 ]
+      self.indicationLED.color = [ 0, 1, 0, 1 ] if PHASES_ACTIVE_LIST[ phaseIndex ] else [ 1, 0, 0, 1 ]
       setpoint = math.sin( 2 * math.pi * self.samplingTime / PHASE_CYCLE_INTERVAL )
-      setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
+      self.setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
       self.setpoints[ DOF_POSITION ] = setpoint * SETPOINT_AMPLITUDE * setpointDirection - SETPOINT_AMPLITUDE
       targetStiffness = PHASES_STIFFNESS_LIST[ phaseIndex ]
-      stiffnessSlider.value = stiffnessSlider.value * 0.9 + targetStiffness * 0.1
-      self.setpoints[ DOF_STIFFNESS ] = stiffnessSlider.value
-      dampingSlider.value = 0.0
+      self.stiffnessSlider.value = self.stiffnessSlider.value * 0.9 + targetStiffness * 0.1
+      self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
+      self.dampingSlider.value = 0.0
 
     if enabled:
       self._SendCommand( PREPROCESS )
       self.samplingEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
     else:
       self.samplingTime = TOTAL_SAMPLING_INTERVAL
-      setpointSlider.value = 0.0
-      stiffnessSlider.value = 0.0
-      dampingSlider.value = 0.0
-      activeLED.color = [ 1, 0, 0, 1 ]
+      self.setpointSlider.value = 0.0
+      self.stiffnessSlider.value = 0.0
+      self.dampingSlider.value = 0.0
+      self.indicationLED.color = [ 1, 0, 0, 1 ]
       self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
       self.samplingEvent.cancel()
 
@@ -275,10 +299,6 @@ class RobRehabGUI( Widget ):
     self.setpoints[ DOF_STIFFNESS ] = 0
     #self.hasStarted = False
 
-    setpointSlider = self.ids[ 'setpoint_slider' ]
-    stiffnessSlider = self.ids[ 'stiffness_slider' ]
-    dampingSlider = self.ids[ 'damping_slider' ]
-    activeLED = self.ids[ 'indication_led' ]
     def UpdateSetpoint( delta ):
       #cyclesCount = int( self.operationTime / PHASE_CYCLE_INTERVAL )
       #self.operationTime += delta
@@ -286,24 +306,24 @@ class RobRehabGUI( Widget ):
       #if self.hasStarted:
       setpoint = - float( self.trajectory[ self.curveStep % len(self.trajectory) ] )
       self.curveStep += 1
-      setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
+      self.setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
       #elif self.setpoints[ DOF_STIFFNESS ] > 0:
       #  if( abs( self.setpoints[ DOF_POSITION ] - self.axisMeasures[ DOF_POSITION ] ) ) < 0.0001:
       #    self.hasStarted = True
-      #stiffnessSlider.value = self.axisMeasures[ DOF_STIFFNESS ]
+      #self.stiffnessSlider.value = self.axisMeasures[ DOF_STIFFNESS ]
       #if cyclesCount < 20: self.setpoints[ DOF_STIFFNESS ] = 60
       #else: self.setpoints[ DOF_STIFFNESS ] = 0
       #self.setpoints[ DOF_STIFFNESS ] = 60
 
     if enabled:
       self._SendCommand( OPERATE )
-      activeLED.color = [ 0, 1, 0, 1 ]
+      self.indicationLED.color = [ 0, 1, 0, 1 ]
       self.operationEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
     else:
-      setpointSlider.value = 0.0
-      stiffnessSlider.value = 0.0
-      dampingSlider.value = 0.0
-      activeLED.color = [ 1, 0, 0, 1 ]
+      self.setpointSlider.value = 0.0
+      self.stiffnessSlider.value = 0.0
+      self.dampingSlider.value = 0.0
+      self.indicationLED.color = [ 1, 0, 0, 1 ]
       self._SendCommand( PASSIVATE )
       self.operationEvent.cancel()
 
