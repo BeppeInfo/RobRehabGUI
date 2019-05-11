@@ -8,7 +8,7 @@ import struct
 
 from definitions import *
 
-DEFAULT_ADDRESS = '127.0.0.1'
+DEFAULT_ADDRESS = '127.0.0.1:50000'
 
 MESSAGE_TIMEOUT = 0.02
 
@@ -19,24 +19,27 @@ class Connection:
   def __init__( self ):
     self.eventSocket = socket( AF_INET, SOCK_STREAM )
     self.axisSocket = socket( AF_INET, SOCK_DGRAM )
-    self.jointSocket = socket( AF_INET, SOCK_DGRAM )
+    #self.jointSocket = socket( AF_INET, SOCK_DGRAM )
 
     self.isConnected = False
 
   def __del__( self ):
     self.Disconnect()
 
-  def Connect( self, host ):
+  def Connect( self, address ):
+    addressParts = address.split( ':' )
+    host = addressParts[ 0 ]
+    port = int( addressParts[ 1 ] )
     try:
       self.Disconnect()
-      self.eventSocket.connect( ( host, 50000 ) )
+      self.eventSocket.connect( ( host, port ) )
       self.eventSocket.settimeout( 5.0 )
-      self.axisSocket.connect( ( host, 50001 ) )
+      self.axisSocket.connect( ( host, port ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
       self.axisSocket.settimeout( MESSAGE_TIMEOUT )
-      self.jointSocket.connect( ( host, 50002 ) )
-      self.jointSocket.sendall( bytearray( BUFFER_SIZE ) )
-      self.jointSocket.settimeout( MESSAGE_TIMEOUT )
+      #self.jointSocket.connect( ( host, 50002 ) )
+      #self.jointSocket.sendall( bytearray( BUFFER_SIZE ) )
+      #self.jointSocket.settimeout( MESSAGE_TIMEOUT )
       self.isConnected = True
       print( 'client connected' )
     except:
@@ -47,7 +50,7 @@ class Connection:
     if self.isConnected:
       self.eventSocket.close()
       self.axisSocket.close()
-      self.jointSocket.close()
+      #self.jointSocket.close()
       self.isConnected = False
 
   def RefreshInfo( self ):
@@ -88,7 +91,7 @@ class Connection:
         print( sys.exc_info() )
 
   def CheckState( self, eventNumber ):
-    return false
+    return False
     #return self.eventSocket.recv( BUFFER_SIZE )
 
   def _SendSetpoints( self, dataSocket, deviceIndex, setpoints ):
@@ -129,5 +132,5 @@ class Connection:
   def ReceiveAxisMeasures( self, axisIndex, measures ):
     return self._ReceiveMeasures( self.axisSocket, axisIndex, measures )
 
-  def ReceiveJointMeasures( self, jointIndex, measures ):
-    return self._ReceiveMeasures( self.jointSocket, jointIndex, measures )
+  #def ReceiveJointMeasures( self, jointIndex, measures ):
+    #return self._ReceiveMeasures( self.jointSocket, jointIndex, measures )
