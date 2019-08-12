@@ -41,8 +41,6 @@ class RobRehabGUI( Widget ):
   samplingEvent = None
   operationEvent = None
 
-  JOINT = 0
-  AXIS = 1
   robotIDs = []
   axisIDs = []
   currentAxisIndex = None
@@ -158,7 +156,6 @@ class RobRehabGUI( Widget ):
         self.setpointsUpdated = False
       self.connection.ReceiveAxisMeasures( self.currentAxisIndex, self.axisMeasures )
       #print( 'DataUpdate: received axis measures: ' + str( self.axisMeasures ) )
-      #self.connection.ReceiveJointMeasures( self.currentJointIndex, self.jointMeasures )
   
   def EventUpdate( self, dt ):
     if self.connection is not None:

@@ -16,7 +16,6 @@ class Connection:
   def __init__( self ):
     self.eventSocket = socket( AF_INET, SOCK_STREAM )
     self.axisSocket = socket( AF_INET, SOCK_DGRAM )
-    #self.jointSocket = socket( AF_INET, SOCK_DGRAM )
 
     self.isConnected = False
 
@@ -29,14 +28,11 @@ class Connection:
     port = int( addressParts[ 1 ] )
     try:
       self.Disconnect()
-      self.eventSocket.connect( ( host, 50000 ) )#port ) )
+      self.eventSocket.connect( ( host, port ) )
       self.eventSocket.settimeout( 5.0 )
-      self.axisSocket.connect( ( host, 50001 ) )#port ) )
+      self.axisSocket.connect( ( host, port ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
       self.axisSocket.settimeout( MESSAGE_TIMEOUT )
-      #self.jointSocket.connect( ( host, 50002 ) )
-      #self.jointSocket.sendall( bytearray( BUFFER_SIZE ) )
-      #self.jointSocket.settimeout( MESSAGE_TIMEOUT )
       self.isConnected = True
       print( 'client connected' )
     except:
@@ -47,7 +43,6 @@ class Connection:
     if self.isConnected:
       self.eventSocket.close()
       self.axisSocket.close()
-      #self.jointSocket.close()
       self.isConnected = False
 
   def SendRequest( self, opcode, dataString='' ):
@@ -114,6 +109,3 @@ class Connection:
 
   def ReceiveAxisMeasures( self, axisIndex, measures ):
     return self._ReceiveMeasures( self.axisSocket, axisIndex, measures )
-
-  #def ReceiveJointMeasures( self, jointIndex, measures ):
-    #return self._ReceiveMeasures( self.jointSocket, jointIndex, measures )
