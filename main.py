@@ -91,7 +91,7 @@ class RobRehabGUI( Widget ):
     dataGraph = self.ids[ 'data_graph' ]
 
     measure_range = self.measureSlider.range
-    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_major':0.25, 'y_grid_label':True, 'x_grid_label':True,
+    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_minor':0.25, 'y_ticks_major':0.5, 'y_grid_label':True, 'x_grid_label':True,
                          'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1, 'ymin':measure_range[ 0 ], 'ymax':measure_range[ 1 ],
                          'background_color':[ 1, 1, 1, 1 ], 'tick_color':[ 0, 0, 0, 1 ], 'border_color':[ 0, 0, 0, 1 ], 'label_options':{ 'color': [ 0, 0, 0, 1 ], 'bold':True } }
 
