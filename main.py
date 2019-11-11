@@ -11,20 +11,17 @@ from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.uix.dropdown import DropDown
 from kivy.uix.button import Button
+from kivy.uix.label import Label
 from kivy.clock import Clock
 
 from kivy.storage.jsonstore import JsonStore
 
 import math
 import json
+import os
 
 from definitions import *
 import ipclient
-
-from kivy.uix.label import Label
-from kivy.properties import ListProperty
-class LED( Label ):
-  color = ListProperty( [ 1, 0, 0, 1 ] )
 
 
 class RobRehabGUI( Widget ):
@@ -36,19 +33,18 @@ class RobRehabGUI( Widget ):
   setpointsUpdated = True
 
   isCalibrating = False
-  isSampling = False
   isOperating = False
-  samplingEvent = None
   operationEvent = None
 
   robotIDs = []
   axisIDs = []
   currentAxisIndex = None
   NULL_ID = '<Select>'
+  DEFAULT_MOTION = 'no_setpoint'
+  MOTIONS_DIR = 'setpoint_motions'
 
-  axisMeasures = [ 0.0 for var in range( DOF_VARS_NUMBER ) ]
+  measures = [ 0.0 for var in range( DOF_VARS_NUMBER ) ]
   setpoints = [ 0.0 for var in range( DOF_VARS_NUMBER ) ]
-  jointMeasures = [ 0.0 for var in range( DOF_VARS_NUMBER ) ]
 
   class DataPlot:
     def __init__( self, handle, values, source, offset ):
@@ -78,48 +74,70 @@ class RobRehabGUI( Widget ):
     self.enableToggle = self.ids[ 'enable_button' ]
     self.offsetToggle = self.ids[ 'offset_button' ]
     self.calibrationToggle = self.ids[ 'calibration_button' ]
-    self.samplingToggle = self.ids[ 'sampling_button' ]
     self.operationToggle = self.ids[ 'operation_button' ]
     
     self.measureSlider = self.ids[ 'measure_slider' ]
     self.setpointSlider = self.ids[ 'setpoint_slider' ]
+    self.forceSlider = self.ids[ 'force_slider' ]
+    self.inertiaSlider = self.ids[ 'inertia_slider' ]
     self.stiffnessSlider = self.ids[ 'stiffness_slider' ]
     self.dampingSlider = self.ids[ 'damping_slider' ]
     
-    self.indicationLED = self.ids[ 'indication_led' ]
+    self.motionSelector = self.ids[ 'motion_selector' ]
+    self.motionEntries = DropDown()
+    self.motionEntries.bind( on_select=lambda instance, name: self.SetMotion( name ) )
+    self.motionSelector.bind( on_release=self.motionEntries.open )
+    setpointMotions = []
+    for fileName in os.listdir( self.MOTIONS_DIR ):
+      if fileName.endswith( '.txt' ):
+          setpointMotions.append( os.path.splitext( fileName )[ 0 ] )
+    self._UpdateSelectorEntries( self.motionSelector, self.motionEntries, setpointMotions )
+    self.SetMotion( self.DEFAULT_MOTION )
     
     dataGraph = self.ids[ 'data_graph' ]
 
     measure_range = self.measureSlider.range
-    GRAPH_PROPERTIES = { 'xlabel':'Last Samples', 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_minor':0.25, 'y_ticks_major':0.5, 'y_grid_label':True, 'x_grid_label':True,
-                         'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1, 'ymin':measure_range[ 0 ], 'ymax':measure_range[ 1 ],
+    GRAPH_PROPERTIES = { 'x_ticks_minor':5, 'x_ticks_major':25, 'y_ticks_minor':0.25, 'y_ticks_major':0.5, 'y_grid_label':True, 'x_grid_label':True,
+                         'padding':5, 'x_grid':True, 'y_grid':True, 'xmin':0, 'xmax':len(self.INITIAL_VALUES) - 1,
                          'background_color':[ 1, 1, 1, 1 ], 'tick_color':[ 0, 0, 0, 1 ], 'border_color':[ 0, 0, 0, 1 ], 'label_options':{ 'color': [ 0, 0, 0, 1 ], 'bold':True } }
 
-    axisPositionGraph = Graph( ylabel='Position', **GRAPH_PROPERTIES )
-    axisPositionPlot = SmoothLinePlot( color=[ 0, 0, 1, 1 ] )
-    axisPositionGraph.add_plot( axisPositionPlot )
-    self.dataPlots.append( RobRehabGUI.DataPlot( axisPositionPlot, self.INITIAL_VALUES[:], self.axisMeasures, DOF_POSITION ) )
-    axisVelocityPlot = SmoothLinePlot( color=[ 0, 1, 0, 1 ] )
-    axisPositionGraph.add_plot( axisVelocityPlot )
-    self.dataPlots.append( RobRehabGUI.DataPlot( axisVelocityPlot, self.INITIAL_VALUES[:], self.axisMeasures, DOF_VELOCITY ) )
+    axisPositionGraph = Graph( ylabel='Position/Setpoint', ymin=measure_range[ 0 ], ymax=measure_range[ 1 ], **GRAPH_PROPERTIES )
+    positionPlot = SmoothLinePlot( color=[ 0, 0, 1, 1 ] )
+    axisPositionGraph.add_plot( positionPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( positionPlot, self.INITIAL_VALUES[:], self.measures, DOF_POSITION ) )
+    velocityPlot = SmoothLinePlot( color=[ 0, 1, 0, 1 ] )
+    axisPositionGraph.add_plot( velocityPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( velocityPlot, self.INITIAL_VALUES[:], self.measures, DOF_VELOCITY ) )
+    accelerationPlot = SmoothLinePlot( color=[ 1, 1, 0, 1 ] )
+    axisPositionGraph.add_plot( accelerationPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( accelerationPlot, self.INITIAL_VALUES[:], self.measures, DOF_ACCELERATION ) )
     refPositionPlot = SmoothLinePlot( color=[ 0, 0, 0.5, 1 ] )
     axisPositionGraph.add_plot( refPositionPlot )
     self.dataPlots.append( RobRehabGUI.DataPlot( refPositionPlot, self.INITIAL_VALUES[:], self.setpoints, DOF_POSITION ) )
-    refVelocityPlot = SmoothLinePlot( color=[ 0, 0.5, 0, 1 ] )
-    axisPositionGraph.add_plot( refVelocityPlot )
-    self.dataPlots.append( RobRehabGUI.DataPlot( refVelocityPlot, self.INITIAL_VALUES[:], self.setpoints, DOF_VELOCITY ) )
-    axisAccelerationPlot = SmoothLinePlot( color=[ 1, 0, 0, 1 ] )
-    axisPositionGraph.add_plot( axisAccelerationPlot )
-    self.dataPlots.append( RobRehabGUI.DataPlot( axisAccelerationPlot, self.INITIAL_VALUES[:], self.axisMeasures, DOF_ACCELERATION ) )
     dataGraph.add_widget( axisPositionGraph )
 
     dataGraph.add_widget( Label( size_hint_y=0.05 ) )
-
-    axisForceGraph = Graph( ylabel='Torque', **GRAPH_PROPERTIES )
-    axisForcePlot = SmoothLinePlot( color=[ 1, 0, 0, 1 ] )
-    axisForceGraph.add_plot( axisForcePlot )
-    self.dataPlots.append( RobRehabGUI.DataPlot( axisForcePlot, self.INITIAL_VALUES[:], self.axisMeasures, DOF_FORCE ) )
+    
+    force_range = self.forceSlider.range
+    axisForceGraph = Graph( ylabel='Force/Impedance', ymin=force_range[ 0 ], ymax=force_range[ 1 ], **GRAPH_PROPERTIES )
+    forcePlot = SmoothLinePlot( color=[ 1, 0, 0, 1 ] )
+    axisForceGraph.add_plot( forcePlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( forcePlot, self.INITIAL_VALUES[:], self.measures, DOF_FORCE ) )
+    dampingPlot = SmoothLinePlot( color=[ 0, 0, 1, 1 ] )
+    axisForceGraph.add_plot( dampingPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( dampingPlot, self.INITIAL_VALUES[:], self.measures, DOF_DAMPING ) )
+    inertiaPlot = SmoothLinePlot( color=[ 0, 1, 0, 1 ] )
+    axisForceGraph.add_plot( inertiaPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( inertiaPlot, self.INITIAL_VALUES[:], self.measures, DOF_INERTIA ) )
+    stiffnessPlot = SmoothLinePlot( color=[ 1, 1, 0, 1 ] )
+    axisForceGraph.add_plot( stiffnessPlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( stiffnessPlot, self.INITIAL_VALUES[:], self.measures, DOF_STIFFNESS ) )
+    refForcePlot = SmoothLinePlot( color=[ 0.5, 0, 0, 1 ] )
+    axisForceGraph.add_plot( refForcePlot )
+    self.dataPlots.append( RobRehabGUI.DataPlot( refForcePlot, self.INITIAL_VALUES[:], self.setpoints, DOF_FORCE ) )
     dataGraph.add_widget( axisForceGraph )
+
+    dataGraph.add_widget( Label( text='Last Samples', size_hint_y=0.1 ) )
 
     Clock.schedule_interval( self.DataUpdate, self.UPDATE_INTERVAL / 2 )
     Clock.schedule_interval( self.GraphUpdate, self.UPDATE_INTERVAL * 2 )
@@ -147,15 +165,15 @@ class RobRehabGUI( Widget ):
       plot.values.append( plot.source[ plot.offset ] )
 
   def SliderUpdate( self, dt ):
-    self.measureSlider.value = self.axisMeasures[ DOF_POSITION ]
+    self.measureSlider.value = self.measures[ DOF_POSITION ]
 
   def DataUpdate( self, dt ):
     if self.connection is not None and self.currentAxisIndex is not None:
       if self.setpointsUpdated:
         self.connection.SendAxisSetpoints( self.currentAxisIndex, self.setpoints )
         self.setpointsUpdated = False
-      self.connection.ReceiveAxisMeasures( self.currentAxisIndex, self.axisMeasures )
-      #print( 'DataUpdate: received axis measures: ' + str( self.axisMeasures ) )
+      self.connection.ReceiveAxisMeasures( self.currentAxisIndex, self.measures )
+      #print( 'DataUpdate: received axis measures: ' + str( self.measures ) )
   
   def EventUpdate( self, dt ):
     if self.connection is not None:
@@ -192,10 +210,11 @@ class RobRehabGUI( Widget ):
     self.currentAxisIndex = self.axisIDs.index( name ) if ( name in self.axisIDs ) else None
 
   def SetSetpoints( self ):
-    if not self.isSampling:
-      self.setpoints[ DOF_POSITION ] = self.setpointSlider.value
-      self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
-      self.setpoints[ DOF_DAMPING ] = self.dampingSlider.value
+    self.setpoints[ DOF_POSITION ] = self.setpointSlider.value
+    self.setpoints[ DOF_FORCE ] = self.forceSlider.value
+    self.setpoints[ DOF_INERTIA ] = self.inertiaSlider.value
+    self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
+    self.setpoints[ DOF_DAMPING ] = self.dampingSlider.value
     self.setpointsUpdated = True
 
   def _SendCommand( self, commandKey ):
@@ -209,7 +228,6 @@ class RobRehabGUI( Widget ):
       self._SendCommand( DISABLE )
       self.offsetToggle.state = 'normal'
       self.calibrationToggle.state = 'normal'
-      self.samplingToggle.state = 'normal'
       self.operationToggle.state = 'normal'
 
   def SetOffset( self, enabled ):
@@ -221,108 +239,43 @@ class RobRehabGUI( Widget ):
 
   def SetCalibration( self, enabled ):
     self.isCalibrating = enabled
-
-    def TurnLedOn( *args ):
-      self.indicationLED.color = [ 0, 1, 0, 1 ]
-      Clock.schedule_once( TurnLedOff, 5.0 )
-    def TurnLedOff( *args ):
-      self.indicationLED.color = [ 1, 0, 0, 1 ]
-      if self.isCalibrating: Clock.schedule_once( TurnLedOn, 3.0 )
-
-    if enabled:
-      self._SendCommand( CALIBRATE )
-      TurnLedOn()
+    if enabled: self._SendCommand( CALIBRATE )
+    else: self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
+  
+  def SetMotion( self, fileName ):
+    import numpy
+    from scipy import signal
+    if fileName == self.DEFAULT_MOTION: self.setpointMotion = None
     else:
-      self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
-      TurnLedOff()
-
-  def SetOptimization( self, enabled ):
-    PHASE_CYCLES_NUMBER = 5
-    PHASE_CYCLE_INTERVAL = 8.0
-    SETPOINT_AMPLITUDE = math.pi / 4
-    #SETPOINT_AMPLITUDE_ANGLE = SETPOINT_AMPLITUDE * 180 / math.pi
-    PHASE_INTERVAL = PHASE_CYCLES_NUMBER * PHASE_CYCLE_INTERVAL
-    PHASES_STIFFNESS_LIST = [     0,    30,    60,   60,   30,    0,    0,   10 ]
-    PHASES_DIRECTION_LIST = [     1,     1,     1,    1,    1,    1,   -1,   -1 ]
-    PHASES_ACTIVE_LIST =    [ False, False, False, True, True, True, True, True ]
-    TOTAL_SAMPLING_INTERVAL = len(PHASES_STIFFNESS_LIST) * PHASE_INTERVAL
-
-    self.isSampling = enabled
-    self.samplingTime = 0.0
-
-    def UpdateSetpoint( delta ):
-      phaseIndex = int( self.samplingTime / PHASE_INTERVAL )
-      if phaseIndex >= len(PHASES_STIFFNESS_LIST):
-        self.samplingToggle.state = 'normal'
-        return False
-      self.samplingTime += delta
-      setpointDirection = PHASES_DIRECTION_LIST[ phaseIndex ]
-      self.indicationLED.color = [ 0, 1, 0, 1 ] if PHASES_ACTIVE_LIST[ phaseIndex ] else [ 1, 0, 0, 1 ]
-      setpoint = math.sin( 2 * math.pi * self.samplingTime / PHASE_CYCLE_INTERVAL )
-      self.setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
-      self.setpoints[ DOF_POSITION ] = setpoint * SETPOINT_AMPLITUDE * setpointDirection - SETPOINT_AMPLITUDE
-      targetStiffness = PHASES_STIFFNESS_LIST[ phaseIndex ]
-      self.stiffnessSlider.value = self.stiffnessSlider.value * 0.9 + targetStiffness * 0.1
-      self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
-      self.dampingSlider.value = 0.0
-
-    if enabled:
-      self._SendCommand( PREPROCESS )
-      self.samplingEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
-    else:
-      self.samplingTime = TOTAL_SAMPLING_INTERVAL
-      self.setpointSlider.value = 0.0
-      self.stiffnessSlider.value = 0.0
-      self.dampingSlider.value = 0.0
-      self.indicationLED.color = [ 1, 0, 0, 1 ]
-      self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
-      self.samplingEvent.cancel()
-
+      self.setpointMotion = numpy.loadtxt( self.MOTIONS_DIR + '/' + fileName + '.txt' )
+      self.setpointMotion = numpy.reshape( self.setpointMotion, numpy.size( self.setpointMotion ) )
+      self.setpointMotion = signal.resample( self.setpointMotion, int(len(self.setpointMotion) / 2) )
+    print( self.setpointMotion )
+  
   def SetOperation( self, enabled ):
-    PHASE_CYCLE_INTERVAL = 8.0
-    SETPOINT_AMPLITUDE = math.pi / 4
-    #SETPOINT_AMPLITUDE_ANGLE = SETPOINT_AMPLITUDE * 180 / math.pi
+    measure_range = self.measureSlider.range
+    setpointAmplitide = abs( measure_range[ 0 ] - measure_range[ 1 ] ) / 4
 
     self.isOperating = enabled
     self.operationTime = 0.0
-
-    import numpy
-    from scipy import signal
-    self.trajectory = numpy.loadtxt( 'positionknee.txt' )
-    self.trajectory = numpy.reshape( self.trajectory, numpy.size( self.trajectory ) )
-    self.trajectory = signal.resample( self.trajectory, int(len(self.trajectory) / 2) )
-    print( self.trajectory )
     self.curveStep = 0
-    self.setpoints[ DOF_STIFFNESS ] = 0
-    #self.hasStarted = False
 
     def UpdateSetpoint( delta ):
-      #cyclesCount = int( self.operationTime / PHASE_CYCLE_INTERVAL )
-      #self.operationTime += delta
-      #setpoint = math.sin( 2 * math.pi * self.operationTime / PHASE_CYCLE_INTERVAL )
-      #if self.hasStarted:
-      setpoint = - float( self.trajectory[ self.curveStep % len(self.trajectory) ] )
+      setpoint = float( self.setpointMotion[ self.curveStep % len(self.setpointMotion) ] )
       self.curveStep += 1
-      self.setpointSlider.value = setpoint * SETPOINT_AMPLITUDE #SETPOINT_AMPLITUDE_ANGLE #- SETPOINT_AMPLITUDE_ANGLE
-      #elif self.setpoints[ DOF_STIFFNESS ] > 0:
-      #  if( abs( self.setpoints[ DOF_POSITION ] - self.axisMeasures[ DOF_POSITION ] ) ) < 0.0001:
-      #    self.hasStarted = True
-      #self.stiffnessSlider.value = self.axisMeasures[ DOF_STIFFNESS ]
-      #if cyclesCount < 20: self.setpoints[ DOF_STIFFNESS ] = 60
-      #else: self.setpoints[ DOF_STIFFNESS ] = 0
-      #self.setpoints[ DOF_STIFFNESS ] = 60
-
+      self.setpointSlider.value = setpoint * setpointAmplitide
+    
+    self.operationEvent = None
     if enabled:
       self._SendCommand( OPERATE )
-      self.indicationLED.color = [ 0, 1, 0, 1 ]
-      self.operationEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
+      if self.setpointMotion is not None:
+        self.operationEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
     else:
       self.setpointSlider.value = 0.0
       self.stiffnessSlider.value = 0.0
       self.dampingSlider.value = 0.0
-      self.indicationLED.color = [ 1, 0, 0, 1 ]
       self._SendCommand( PASSIVATE )
-      self.operationEvent.cancel()
+      if self.operationEvent is not None: self.operationEvent.cancel()
 
 class RobRehabApp( App ):
   def build( self ):

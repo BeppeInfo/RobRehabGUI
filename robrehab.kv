@@ -1,11 +1,3 @@
-<LED>:
-  canvas.before:
-    Color:
-      rgba: self.color
-    Rectangle:
-      pos: self.pos[ 0 ] + 5, self.pos[ 1 ] + 5
-      size: self.size[ 0 ] - 10, self.size[ 1 ] - 10
-
 <RobRehabGUI>:
 
   BoxLayout:
@@ -86,17 +78,14 @@
       pos_hint: { 'center_x': 0.5 }
       size_hint_x: 0.8
       on_release: root.SetCalibration( self.state == 'down' )
-    LED:
-      id: indication_led
-      pos_hint: { 'center_x': 0.5 }
-      size_hint_x: 0.7
-    ToggleButton:
-      id: sampling_button
-      text: 'Sampling'
-      group: 'control_state'
-      pos_hint: { 'center_x': 0.5 }
-      size_hint_x: 0.8
-      on_state: root.SetOptimization( self.state == 'down' )
+    BoxLayout:
+      Label:
+        text: 'Motion:  '
+        size_hint: ( 0.4, 0.8 )
+      Button:
+        id: motion_selector
+        text: root.DEFAULT_MOTION
+        size_hint_y: 0.8
     ToggleButton:
       id: operation_button
       text: 'Operation'
@@ -106,6 +95,14 @@
 
     Label:
       size_hint_y: 0.2
+    Label:
+      text: '\nInertia: ' + format(damping_slider.value, '.3f' )
+      size_hint_y: 0.2
+    Slider:
+      id: inertia_slider
+      range: 0, 10
+      step: 1
+      on_value: root.SetSetpoints()
     Label:
       text: '\nStiffness: ' + format(stiffness_slider.value, '.3f' )
       size_hint_y: 0.2
@@ -120,7 +117,7 @@
     Slider:
       id: damping_slider
       range: 0, 10
-      step: 1
+      step: 0.1
       on_value: root.SetSetpoints()
 
   BoxLayout:
@@ -163,6 +160,23 @@
       TextInput:
         text: format( setpoint_slider.value, '.3f' )
         multiline: False
-        size_hint_x: 0.8
+        size_hint_x: 1.2
         size_hint_y: 0.05
         on_text_validate: setpoint_slider.value = float(self.text)
+    
+    BoxLayout:
+      orientation: 'vertical'
+      Label:
+        text: 'Force\nSetpoint'
+        size_hint_y: 0.1
+      Slider:
+        id: force_slider
+        orientation: 'vertical'
+        range: -5.0, 5.0
+        on_value: root.SetSetpoints()
+      TextInput:
+        text: format( force_slider.value, '.3f' )
+        multiline: False
+        size_hint_x: 1.2
+        size_hint_y: 0.05
+        on_text_validate: force_slider.value = float(self.text)
