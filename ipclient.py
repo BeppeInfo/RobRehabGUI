@@ -32,7 +32,7 @@ class Connection:
       self.eventSocket.settimeout( 5.0 )
       self.axisSocket.connect( ( host, port ) )
       self.axisSocket.sendall( bytearray( BUFFER_SIZE ) )
-      self.axisSocket.settimeout( MESSAGE_TIMEOUT )
+      self.axisSocket.settimeout( 2 * MESSAGE_TIMEOUT )
       self.isConnected = True
       print( 'client connected' )
     except:
@@ -49,7 +49,7 @@ class Connection:
     replyCode = 0
     replyString = ''
     if self.isConnected:
-      messageBuffer = bytearray( [ opcode ] ) + dataString.encode()
+      messageBuffer = bytearray( [ opcode ] ) + dataString.encode() + bytearray( [ 0 ] )
       print( 'SendRequest: sending message buffer: ' + str(list(messageBuffer)) )
       try:
         self.eventSocket.sendall( messageBuffer )
