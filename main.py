@@ -34,7 +34,7 @@ class RobRehabGUI( Widget ):
 
   isCalibrating = False
   isOperating = False
-  operationEvent = None
+  setpointUpdateEvent = None
 
   robotIDs = []
   axisIDs = []
@@ -93,6 +93,8 @@ class RobRehabGUI( Widget ):
           setpointMotions.append( os.path.splitext( fileName )[ 0 ] )
     self._UpdateSelectorEntries( self.motionSelector, self.motionEntries, setpointMotions )
     self.SetMotion( self.DEFAULT_MOTION )
+    
+    self.setpointUpdateEvent = None
     
     dataGraph = self.ids[ 'data_graph' ]
 
@@ -166,6 +168,10 @@ class RobRehabGUI( Widget ):
 
   def SliderUpdate( self, dt ):
     self.measureSlider.value = self.measures[ DOF_POSITION ]
+    if self.isCalibrating:
+      self.inertiaSlider.value = self.measures[ DOF_INERTIA ]
+      self.stiffnessSlider.value = self.measures[ DOF_STIFFNESS ]
+      self.dampingSlider.value = self.measures[ DOF_DAMPING ]
 
   def DataUpdate( self, dt ):
     if self.connection is not None and self.currentAxisIndex is not None:
@@ -212,9 +218,10 @@ class RobRehabGUI( Widget ):
   def SetSetpoints( self ):
     self.setpoints[ DOF_POSITION ] = self.setpointSlider.value
     self.setpoints[ DOF_FORCE ] = self.forceSlider.value
-    self.setpoints[ DOF_INERTIA ] = self.inertiaSlider.value
-    self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
-    self.setpoints[ DOF_DAMPING ] = self.dampingSlider.value
+    if not self.isCalibrating:
+      self.setpoints[ DOF_INERTIA ] = self.inertiaSlider.value
+      self.setpoints[ DOF_STIFFNESS ] = self.stiffnessSlider.value
+      self.setpoints[ DOF_DAMPING ] = self.dampingSlider.value
     self.setpointsUpdated = True
 
   def _SendCommand( self, commandKey ):
@@ -237,26 +244,24 @@ class RobRehabGUI( Widget ):
       self.setpointSlider.value = 0
       self.SetSetpoints()
 
-  def SetCalibration( self, enabled ):
-    self.isCalibrating = enabled
-    if enabled: self._SendCommand( CALIBRATE )
-    else: self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
-  
   def SetMotion( self, fileName ):
     import numpy
-    from scipy import signal
+    #from scipy import signal
     if fileName == self.DEFAULT_MOTION: self.setpointMotion = None
     else:
-      self.setpointMotion = numpy.loadtxt( self.MOTIONS_DIR + '/' + fileName + '.txt' )
-      self.setpointMotion = numpy.reshape( self.setpointMotion, numpy.size( self.setpointMotion ) )
-      self.setpointMotion = signal.resample( self.setpointMotion, int(len(self.setpointMotion) / 2) )
-    print( self.setpointMotion )
+      try: 
+        self.setpointMotion = numpy.loadtxt( self.MOTIONS_DIR + '/' + fileName + '.txt' )
+        self.setpointMotion = numpy.reshape( self.setpointMotion, numpy.size( self.setpointMotion ) )
+        #self.setpointMotion = signal.resample( self.setpointMotion, int(len(self.setpointMotion) / 2) )
+      except Exception as e:
+        print( e )
+        self.setpointMotion = None
+    self.motionSelector.text = fileName
   
-  def SetOperation( self, enabled ):
+  def _RunSetpointsMotion( self, enabled ):
     measure_range = self.measureSlider.range
     setpointAmplitide = abs( measure_range[ 0 ] - measure_range[ 1 ] ) / 4
 
-    self.isOperating = enabled
     self.operationTime = 0.0
     self.curveStep = 0
 
@@ -265,17 +270,27 @@ class RobRehabGUI( Widget ):
       self.curveStep += 1
       self.setpointSlider.value = setpoint * setpointAmplitide
     
-    self.operationEvent = None
-    if enabled:
-      self._SendCommand( OPERATE )
-      if self.setpointMotion is not None:
-        self.operationEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
+    if enabled and self.setpointMotion is not None:
+      self.setpointUpdateEvent = Clock.schedule_interval( UpdateSetpoint, self.UPDATE_INTERVAL * 2 )
     else:
       self.setpointSlider.value = 0.0
       self.stiffnessSlider.value = 0.0
       self.dampingSlider.value = 0.0
-      self._SendCommand( PASSIVATE )
-      if self.operationEvent is not None: self.operationEvent.cancel()
+      if self.setpointUpdateEvent is not None: 
+        self.setpointUpdateEvent.cancel()
+        self.setpointUpdateEvent = None
+  
+  def SetCalibration( self, enabled ):
+    self.isCalibrating = enabled
+    if enabled: self._SendCommand( CALIBRATE )
+    else: self._SendCommand( OPERATE if self.isOperating else PASSIVATE )
+    self._RunSetpointsMotion( enabled )
+  
+  def SetOperation( self, enabled ):
+    self.isOperating = enabled
+    if enabled: self._SendCommand( OPERATE )
+    else: self._SendCommand( PASSIVATE )
+    self._RunSetpointsMotion( enabled )
 
 class RobRehabApp( App ):
   def build( self ):

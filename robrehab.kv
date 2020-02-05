@@ -100,8 +100,8 @@
       size_hint_y: 0.2
     Slider:
       id: inertia_slider
-      range: 0, 10
-      step: 1
+      range: 0, 100
+      step: 0.1
       on_value: root.SetSetpoints()
     Label:
       text: '\nStiffness: ' + format(stiffness_slider.value, '.3f' )
@@ -109,14 +109,14 @@
     Slider:
       id: stiffness_slider
       range: 0, 100
-      step: 1
+      step: 0.1
       on_value: root.SetSetpoints()
     Label:
       text: '\nDamping: ' + format(damping_slider.value, '.3f' )
       size_hint_y: 0.2
     Slider:
       id: damping_slider
-      range: 0, 10
+      range: 0, 100
       step: 0.1
       on_value: root.SetSetpoints()
 
